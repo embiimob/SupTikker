@@ -116,20 +116,34 @@
     <div class="grid" style="margin-top:14px">
       <section class="card span-8">
         <h2>Ticker search</h2>
-        <div class="row">
+        <div class="row" style="grid-template-columns: repeat(5,minmax(0,1fr));">
           <div class="field">
-            <label for="coinSelect">Coin preset</label>
+            <label for="coinSelect">Base coin</label>
             <select id="coinSelect">
-              <option value="BTC" selected>Bitcoin (#BTC)</option>
-              <option value="LTC">Litecoin (#LTC)</option>
-              <option value="DOG">Dogecoin (#DOG)</option>
-              <option value="XTZ">Tezos (#XTZ)</option>
-              <option value="ETH">Ethereum (#ETH)</option>
+              <option value="BTC" selected>Bitcoin (BTC)</option>
+              <option value="LTC">Litecoin (LTC)</option>
+              <option value="DOG">Dogecoin (DOGE)</option>
+              <option value="XTZ">Tezos (XTZ)</option>
+              <option value="ETH">Ethereum (ETH)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="quoteCurrencySelect">Quote currency</label>
+            <select id="quoteCurrencySelect">
+              <option value="USD" selected>USD – US Dollar</option>
+              <option value="EUR">EUR – Euro</option>
+              <option value="GBP">GBP – British Pound</option>
+              <option value="JPY">JPY – Japanese Yen</option>
+              <option value="CAD">CAD – Canadian Dollar</option>
+              <option value="AUD">AUD – Australian Dollar</option>
+              <option value="BTC">BTC – Bitcoin</option>
+              <option value="ETH">ETH – Ethereum</option>
+              <option value="LTC">LTC – Litecoin</option>
             </select>
           </div>
           <div class="field">
             <label for="keywordInput">Keyword</label>
-            <input id="keywordInput" value="#BTC" autocomplete="off" spellcheck="false">
+            <input id="keywordInput" value="#BTC-USD" autocomplete="off" spellcheck="false">
           </div>
           <div class="field">
             <label for="apiBaseInput">p2fk API</label>
@@ -145,7 +159,7 @@
           <button id="liveBtn" class="good">Start live updates</button>
           <button id="stopLiveBtn" class="warn">Stop live updates</button>
         </div>
-        <div id="searchStatus" class="status">Ready. Default keyword is <code>#BTC</code>.</div>
+        <div id="searchStatus" class="status">Ready. Default keyword is <code>#BTC-USD</code>.</div>
 
         <div style="margin-top:12px" class="meta" id="summaryMeta"></div>
 
@@ -229,11 +243,23 @@
     const FALLBACK_AVI = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" fill="%23182a45"/%3E%3Ctext x="50%25" y="56%25" dominant-baseline="middle" text-anchor="middle" font-family="system-ui" font-size="52" fill="%23a9bee6"%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E';
 
     const COIN_PRESETS = {
-      BTC: { keyword: '#BTC', cgId: 'bitcoin', cgField: 'btc', decimals: 2 },
-      LTC: { keyword: '#LTC', cgId: 'litecoin', cgField: 'ltc', decimals: 4 },
-      DOG: { keyword: '#DOG', cgId: 'dogecoin', cgField: 'doge', decimals: 6 },
-      XTZ: { keyword: '#XTZ', cgId: 'tezos', cgField: 'xtz', decimals: 5 },
-      ETH: { keyword: '#ETH', cgId: 'ethereum', cgField: 'eth', decimals: 3 },
+      BTC: { keyword: '#BTC', cgId: 'bitcoin' },
+      LTC: { keyword: '#LTC', cgId: 'litecoin' },
+      DOG: { keyword: '#DOG', cgId: 'dogecoin' },
+      XTZ: { keyword: '#XTZ', cgId: 'tezos' },
+      ETH: { keyword: '#ETH', cgId: 'ethereum' },
+    };
+
+    const QUOTE_CURRENCIES = {
+      USD: { cgId: 'usd', decimals: 2 },
+      EUR: { cgId: 'eur', decimals: 2 },
+      GBP: { cgId: 'gbp', decimals: 2 },
+      JPY: { cgId: 'jpy', decimals: 0 },
+      CAD: { cgId: 'cad', decimals: 2 },
+      AUD: { cgId: 'aud', decimals: 2 },
+      BTC: { cgId: 'btc', decimals: 8 },
+      ETH: { cgId: 'eth', decimals: 6 },
+      LTC: { cgId: 'ltc', decimals: 4 },
     };
 
     const S = {
@@ -886,15 +912,20 @@
     }
 
     function getSelectedSymbol() { return norm($('coinSelect').value || 'BTC').toUpperCase(); }
+    function getSelectedQuote() { return norm($('quoteCurrencySelect').value || 'USD').toUpperCase(); }
 
-    async function fetchCoinPrice(symbol) {
-      const preset = COIN_PRESETS[symbol] || COIN_PRESETS.BTC;
+    async function fetchCoinPrice(compoundSymbol) {
+      const dashIdx = compoundSymbol.indexOf('-');
+      const baseSymbol = dashIdx >= 0 ? compoundSymbol.slice(0, dashIdx) : compoundSymbol;
+      const quoteSymbol = dashIdx >= 0 ? compoundSymbol.slice(dashIdx + 1) : 'USD';
+      const basePreset = COIN_PRESETS[baseSymbol] || COIN_PRESETS.BTC;
+      const quotePreset = QUOTE_CURRENCIES[quoteSymbol] || QUOTE_CURRENCIES.USD;
       const base = norm($('priceApiInput').value) || 'https://api.coingecko.com/api/v3/simple/price';
-      const url = `${base}?ids=${encodeURIComponent(preset.cgId)}&vs_currencies=usd`;
+      const url = `${base}?ids=${encodeURIComponent(basePreset.cgId)}&vs_currencies=${encodeURIComponent(quotePreset.cgId)}`;
       const payload = await fetchJson(url, 20000);
-      const value = Number(payload?.[preset.cgId]?.usd);
-      if (!Number.isFinite(value) || value <= 0) throw new Error(`Invalid ${symbol} price response.`);
-      return value;
+      const value = Number(payload?.[basePreset.cgId]?.[quotePreset.cgId]);
+      if (!Number.isFinite(value) || value <= 0) throw new Error(`Invalid ${compoundSymbol} price response.`);
+      return { price: value, decimals: quotePreset.decimals };
     }
 
     async function fetchRecentKeywordRows(keyword) {
@@ -1129,11 +1160,10 @@
 
     async function postCurrentPrice() {
       if (!S.priv || !S.addr) throw new Error('Unlock wallet first.');
-      const symbol = getSelectedSymbol();
-      const keyword = norm($('keywordInput').value) || `#${symbol}`;
-      const preset = COIN_PRESETS[symbol] || COIN_PRESETS.BTC;
-      const price = await fetchCoinPrice(symbol);
-      const text = `${keyword.toUpperCase()} ${price.toFixed(preset.decimals)} USD`;
+      const keyword = norm($('keywordInput').value) || '#BTC-USD';
+      const sym = keyword.replace(/^#/, '').toUpperCase();
+      const { price, decimals } = await fetchCoinPrice(sym);
+      const text = `${keyword.toUpperCase()} ${price.toFixed(decimals)}`;
       const outputs = await buildMsgOutputs({ text, fromAddr: S.addr });
       const txid = await broadcastTx(outputs);
       appendLog(`Posted ${text} in tx ${txid}`, 'good');
@@ -1192,9 +1222,10 @@
 
     function applyCoinPreset() {
       const symbol = getSelectedSymbol();
+      const quote = getSelectedQuote();
       const preset = COIN_PRESETS[symbol];
       if (!preset) return;
-      $('keywordInput').value = preset.keyword;
+      $('keywordInput').value = `#${symbol}-${quote}`;
     }
 
     function startLive() {
@@ -1215,6 +1246,10 @@
     }
 
     $('coinSelect').addEventListener('change', () => {
+      applyCoinPreset();
+      loadAndRender().catch(() => {});
+    });
+    $('quoteCurrencySelect').addEventListener('change', () => {
       applyCoinPreset();
       loadAndRender().catch(() => {});
     });
