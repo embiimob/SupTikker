@@ -87,6 +87,8 @@
     th, td { padding: 9px 10px; border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 30%); vertical-align: middle; }
     th { position: sticky; top: 0; background: #12203a; text-align: left; }
     .user { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    a.user-link { text-decoration: none; color: inherit; cursor: pointer; }
+    a.user-link:hover .user-main b { text-decoration: underline; }
     .avatar { width: 28px; height: 28px; border-radius: 50%; background: #233553; object-fit: cover; border: 1px solid var(--border); }
     .user-main { min-width: 0; }
     .user-main b, .user-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1051,12 +1053,15 @@
         const avatar = profileImgUrl(profile?.image || '');
         const name = buildDisplayName(profile, row.addr);
         const state = row.last?.pending ? 'pending' : 'confirmed';
+        const urn = profile ? norm(profile.urn).replace(/^@+/, '') : '';
+        const supspaceQ = urn ? `@${urn}` : row.addr;
+        const supspaceUrl = `https://supspace.io/?q=${encodeURIComponent(supspaceQ)}`;
         return `<tr>
           <td>
-            <div class="user">
+            <a class="user user-link" href="${esc(supspaceUrl)}" target="_blank" rel="noopener noreferrer">
               <img class="avatar" src="${esc(avatar)}" alt="avatar" loading="lazy">
               <div class="user-main"><b>${esc(name)}</b><span>${esc(shortAddr(row.addr))}</span></div>
-            </div>
+            </a>
           </td>
           <td>${row.last ? esc(String(row.last.price)) : '—'}</td>
           <td>${row.last ? esc(new Date(row.last.ts).toLocaleString()) : '—'}</td>
