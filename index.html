@@ -994,7 +994,14 @@
           grouped.get(addr).push(point);
         }
 
-        for (const [addr, pts] of grouped) pts.sort((a, b) => a.ts - b.ts);
+        for (const [, pts] of grouped) {
+          pts.sort((a, b) => a.ts - b.ts);
+          // Ensure points are strictly increasing on X so overlapping timestamps
+          // (common for pending/rapid posts) still render as separate points.
+          for (let i = 1; i < pts.length; i++) {
+            if (pts[i].ts <= pts[i - 1].ts) pts[i].ts = pts[i - 1].ts + 1;
+          }
+        }
         S.pointsByUser = grouped;
 
         const addresses = [...grouped.keys()];
@@ -1099,10 +1106,11 @@
       const plotH = height - pad.t - pad.b;
       if (plotW <= 10 || plotH <= 10) return;
 
-      const now = Date.now();
-      const minX = now - 24 * 60 * 60 * 1000;
-      const maxX = now;
       const points = [...S.pointsByUser.values()].flat();
+      const now = Date.now();
+      const latestPointTs = points.length ? Math.max(...points.map(p => Number(p.ts) || 0)) : now;
+      const maxX = Math.max(now, latestPointTs);
+      const minX = maxX - 24 * 60 * 60 * 1000;
       let minY = Math.min(...points.map(p => p.price));
       let maxY = Math.max(...points.map(p => p.price));
       if (!Number.isFinite(minY) || !Number.isFinite(maxY)) {
