@@ -1201,18 +1201,28 @@
 
       while (S.posting) {
         try {
-          const { confirmed } = await refreshWalletInfo();
-          if (confirmed < DUST * 3) {
-            setStatus('walletStatus', 'Waiting for confirmed funds across main/change addresses…', 'warn');
-            await sleep(15000);
-            continue;
-          }
-
           const intervalMinutes = Math.max(0, Number($('postRateInput').value || 60) || 60);
           const minGapMs = intervalMinutes === 0 ? 15000 : intervalMinutes * 60 * 1000;
           const since = Date.now() - (S.lastPostAt || 0);
+
+          // While waiting for the next etching interval, skip mempool entirely.
           if (since < minGapMs) {
-            await sleep(Math.min(15000, minGapMs - since));
+            const remaining = minGapMs - since;
+            const next = new Date(Date.now() + remaining).toLocaleTimeString();
+            setStatus('walletStatus', `Waiting for next post at ${next}.`, 'good');
+            await sleep(Math.min(30000, remaining));
+            continue;
+          }
+
+          // It's time to etch — check balance via mempool.
+          const { confirmed, unconfirmed } = await refreshWalletInfo();
+          if (confirmed < DUST * 3) {
+            if (unconfirmed > 0) {
+              setStatus('walletStatus', 'Funds unconfirmed — waiting for confirmation…', 'warn');
+            } else {
+              setStatus('walletStatus', 'Waiting for confirmed funds across main/change addresses…', 'warn');
+            }
+            await sleep(30000);
             continue;
           }
 
@@ -1229,7 +1239,7 @@
         } catch (error) {
           appendLog(`Posting loop warning: ${error.message || error}`, 'warn');
           setStatus('walletStatus', `Auto posting paused by error: ${error.message || error}`, 'warn');
-          await sleep(20000);
+          await sleep(30000);
         }
       }
 
