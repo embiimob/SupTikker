@@ -368,13 +368,24 @@
       const fallback = clean.match(/(-?\d+(?:\.\d+)?)/);
       const rawPrice = Number(exact?.[1] || fallback?.[1]);
       if (!Number.isFinite(rawPrice) || rawPrice <= 0) return null;
-      const ts = Date.parse(String(row.blockDate || ''));
+      const ts = parseUtcMs(row.blockDate || '');
       const when = Number.isFinite(ts) ? ts : Date.now();
       return { price: rawPrice, ts: when, pending: row.isPending, txId: row.txId };
     }
 
     function shortAddr(addr) { const t = norm(addr); return t.length > 16 ? `${t.slice(0,8)}…${t.slice(-5)}` : t; }
-    function parseTimestamp(v) { const t = Date.parse(String(v || '')); return Number.isFinite(t) ? t : 0; }
+    // Parse a date string as UTC. Bare ISO strings (no timezone designator) from the API are UTC
+    // but Date.parse() treats them as local time, shifting points out of the 24-hour window.
+    function parseUtcMs(v) {
+      const s = String(v || '').trim();
+      if (!s) return NaN;
+      // If it looks like a bare ISO datetime (no Z / +HH:MM / -HH:MM at the end), append Z
+      const normalized = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s) && !/Z$/i.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)
+        ? s.replace(' ', 'T') + 'Z'
+        : s;
+      return Date.parse(normalized);
+    }
+    function parseTimestamp(v) { const t = parseUtcMs(v); return Number.isFinite(t) ? t : 0; }
     function colorForAddress(addr) {
       let h = 0;
       for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
