@@ -87,6 +87,8 @@
     th, td { padding: 9px 10px; border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 30%); vertical-align: middle; }
     th { position: sticky; top: 0; background: #12203a; text-align: left; }
     .user { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    a.user-link { text-decoration: none; color: inherit; cursor: pointer; }
+    a.user-link:hover .user-main b { text-decoration: underline; }
     .avatar { width: 28px; height: 28px; border-radius: 50%; background: #233553; object-fit: cover; border: 1px solid var(--border); }
     .user-main { min-width: 0; }
     .user-main b, .user-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -366,13 +368,24 @@
       const fallback = clean.match(/(-?\d+(?:\.\d+)?)/);
       const rawPrice = Number(exact?.[1] || fallback?.[1]);
       if (!Number.isFinite(rawPrice) || rawPrice <= 0) return null;
-      const ts = Date.parse(String(row.blockDate || ''));
+      const ts = parseUtcMs(row.blockDate || '');
       const when = Number.isFinite(ts) ? ts : Date.now();
       return { price: rawPrice, ts: when, pending: row.isPending, txId: row.txId };
     }
 
     function shortAddr(addr) { const t = norm(addr); return t.length > 16 ? `${t.slice(0,8)}…${t.slice(-5)}` : t; }
-    function parseTimestamp(v) { const t = Date.parse(String(v || '')); return Number.isFinite(t) ? t : 0; }
+    // Parse a date string as UTC. Bare ISO strings (no timezone designator) from the API are UTC
+    // but Date.parse() treats them as local time, shifting points out of the 24-hour window.
+    function parseUtcMs(v) {
+      const s = String(v || '').trim();
+      if (!s) return NaN;
+      // If it looks like a bare ISO datetime (no Z / +HH:MM / -HH:MM at the end), append Z
+      const normalized = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s) && !/Z$/i.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)
+        ? s.replace(' ', 'T') + 'Z'
+        : s;
+      return Date.parse(normalized);
+    }
+    function parseTimestamp(v) { const t = parseUtcMs(v); return Number.isFinite(t) ? t : 0; }
     function colorForAddress(addr) {
       let h = 0;
       for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
@@ -981,7 +994,14 @@
           grouped.get(addr).push(point);
         }
 
-        for (const [addr, pts] of grouped) pts.sort((a, b) => a.ts - b.ts);
+        for (const [, pts] of grouped) {
+          pts.sort((a, b) => a.ts - b.ts);
+          // Ensure points are strictly increasing on X so overlapping timestamps
+          // (common for pending/rapid posts) still render as separate points.
+          for (let i = 1; i < pts.length; i++) {
+            if (pts[i].ts <= pts[i - 1].ts) pts[i].ts = pts[i - 1].ts + 1;
+          }
+        }
         S.pointsByUser = grouped;
 
         const addresses = [...grouped.keys()];
@@ -1051,12 +1071,15 @@
         const avatar = profileImgUrl(profile?.image || '');
         const name = buildDisplayName(profile, row.addr);
         const state = row.last?.pending ? 'pending' : 'confirmed';
+        const urn = profile ? norm(profile.urn).replace(/^@+/, '') : '';
+        const supspaceQ = urn ? `@${urn}` : row.addr;
+        const supspaceUrl = `https://supspace.io/?q=${encodeURIComponent(supspaceQ)}`;
         return `<tr>
           <td>
-            <div class="user">
+            <a class="user user-link" href="${esc(supspaceUrl)}" target="_blank" rel="noopener noreferrer">
               <img class="avatar" src="${esc(avatar)}" alt="avatar" loading="lazy">
               <div class="user-main"><b>${esc(name)}</b><span>${esc(shortAddr(row.addr))}</span></div>
-            </div>
+            </a>
           </td>
           <td>${row.last ? esc(String(row.last.price)) : '—'}</td>
           <td>${row.last ? esc(new Date(row.last.ts).toLocaleString()) : '—'}</td>
@@ -1083,10 +1106,11 @@
       const plotH = height - pad.t - pad.b;
       if (plotW <= 10 || plotH <= 10) return;
 
-      const now = Date.now();
-      const minX = now - 24 * 60 * 60 * 1000;
-      const maxX = now;
       const points = [...S.pointsByUser.values()].flat();
+      const now = Date.now();
+      const latestPointTs = points.length ? Math.max(...points.map(p => Number(p.ts) || 0)) : now;
+      const maxX = Math.max(now, latestPointTs);
+      const minX = maxX - 24 * 60 * 60 * 1000;
       let minY = Math.min(...points.map(p => p.price));
       let maxY = Math.max(...points.map(p => p.price));
       if (!Number.isFinite(minY) || !Number.isFinite(maxY)) {
