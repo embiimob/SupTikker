@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SupTikker</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070d18;
+      --panel: #0f1729;
+      --border: #26344f;
+      --text: #e5edff;
+      --muted: #9fb1d4;
+      --accent: #69b0ff;
+      --good: #32c48d;
+      --warn: #ffcb68;
+      --bad: #ff7f7f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top, #0d1730 0%, var(--bg) 40%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 20px; }
+    h1, h2 { margin: 0 0 10px; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(12,minmax(0,1fr)); }
+    .card {
+      background: color-mix(in srgb, var(--panel), black 6%);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .span-4 { grid-column: span 4; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+    @media (max-width: 980px) { .span-4,.span-8,.span-12 { grid-column: span 12; } }
+    .row { display: grid; gap: 10px; grid-template-columns: repeat(4,minmax(0,1fr)); }
+    @media (max-width: 780px) { .row { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: .86rem; color: var(--muted); }
+    input, select, button { font: inherit; }
+    input, select {
+      width: 100%;
+      background: #0a1324;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      background: #172742;
+      color: var(--text);
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); color: #08101f; border: 0; font-weight: 700; }
+    button.good { background: var(--good); color: #032015; border: 0; font-weight: 700; }
+    button.warn { background: var(--warn); color: #261500; border: 0; font-weight: 700; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0a1324;
+      color: var(--muted);
+      white-space: pre-wrap;
+      font-size: .9rem;
+    }
+    .status.good { border-color: color-mix(in srgb, var(--good), white 20%); color: #b7f5dd; }
+    .status.warn { border-color: color-mix(in srgb, var(--warn), white 15%); color: #ffe6b8; }
+    .status.bad { border-color: color-mix(in srgb, var(--bad), white 10%); color: #ffc6c6; }
+    .chart-wrap { height: 420px; position: relative; }
+    #chart { width: 100%; height: 100%; display: block; background: #091224; border-radius: 12px; }
+    .meta { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+    @media (max-width: 780px) { .meta { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+    .meta > div { background: #0a1324; border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+    .meta b { display: block; margin-top: 4px; }
+    .user-list { max-height: 360px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 30%); vertical-align: middle; }
+    th { position: sticky; top: 0; background: #12203a; text-align: left; }
+    .user { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .avatar { width: 28px; height: 28px; border-radius: 50%; background: #233553; object-fit: cover; border: 1px solid var(--border); }
+    .user-main { min-width: 0; }
+    .user-main b, .user-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-main span { color: var(--muted); font-size: .8rem; }
+    #log {
+      margin-top: 8px;
+      background: #09111f;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      min-height: 120px;
+      max-height: 220px;
+      overflow: auto;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .8rem;
+      white-space: pre-wrap;
+    }
+    .small { font-size: .82rem; color: var(--muted); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>SupTikker</h1>
+    <p class="small">Single-file testnet3 price ticker + publisher for p2fk.io keywords.</p>
+
+    <div class="grid" style="margin-top:14px">
+      <section class="card span-8">
+        <h2>Ticker search</h2>
+        <div class="row" style="grid-template-columns: repeat(5,minmax(0,1fr));">
+          <div class="field">
+            <label for="coinSelect">Base coin</label>
+            <select id="coinSelect">
+              <option value="BTC" selected>Bitcoin (BTC)</option>
+              <option value="LTC">Litecoin (LTC)</option>
+              <option value="DOG">Dogecoin (DOGE)</option>
+              <option value="XTZ">Tezos (XTZ)</option>
+              <option value="ETH">Ethereum (ETH)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="quoteCurrencySelect">Quote currency</label>
+            <select id="quoteCurrencySelect">
+              <option value="USD" selected>USD – US Dollar</option>
+              <option value="EUR">EUR – Euro</option>
+              <option value="GBP">GBP – British Pound</option>
+              <option value="JPY">JPY – Japanese Yen</option>
+              <option value="CAD">CAD – Canadian Dollar</option>
+              <option value="AUD">AUD – Australian Dollar</option>
+              <option value="BTC">BTC – Bitcoin</option>
+              <option value="ETH">ETH – Ethereum</option>
+              <option value="LTC">LTC – Litecoin</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="keywordInput">Keyword</label>
+            <input id="keywordInput" value="#BTC-USD" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="apiBaseInput">p2fk API</label>
+            <input id="apiBaseInput" value="https://p2fk.io" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="refreshInput">Refresh seconds</label>
+            <input id="refreshInput" type="number" min="10" max="300" step="5" value="20">
+          </div>
+        </div>
+        <div class="btns">
+          <button id="searchBtn" class="primary">Refresh chart</button>
+          <button id="liveBtn" class="good">Start live updates</button>
+          <button id="stopLiveBtn" class="warn">Stop live updates</button>
+        </div>
+        <div id="searchStatus" class="status">Ready. Default keyword is <code>#BTC-USD</code>.</div>
+
+        <div style="margin-top:12px" class="meta" id="summaryMeta"></div>
+
+        <div style="margin-top:12px" class="chart-wrap">
+          <canvas id="chart" aria-label="24 hour price chart"></canvas>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>Wallet + auto etching</h2>
+        <div class="field">
+          <label for="wifInput">Testnet3 WIF</label>
+          <input id="wifInput" type="password" placeholder="c... or 9..." autocomplete="off" spellcheck="false">
+        </div>
+        <div class="btns">
+          <button id="unlockBtn" class="primary">Unlock wallet</button>
+          <button id="refreshWalletBtn">Refresh balances</button>
+          <button id="clearWalletBtn" class="warn">Clear wallet</button>
+        </div>
+
+        <div class="row" style="grid-template-columns: repeat(2,minmax(0,1fr)); margin-top:10px;">
+          <div class="field">
+            <label for="postRateInput">Posting interval (minutes)</label>
+            <input id="postRateInput" type="number" min="0" step="1" value="60">
+          </div>
+          <div class="field">
+            <label for="priceApiInput">Price API endpoint</label>
+            <input id="priceApiInput" value="https://api.coingecko.com/api/v3/simple/price" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="startPosterBtn" class="good">Start posting</button>
+          <button id="stopPosterBtn" class="warn">Stop posting</button>
+        </div>
+
+        <div id="walletStatus" class="status">Wallet locked.</div>
+        <div id="walletInfo" class="small" style="margin-top:8px"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Reporters in last 24h</h2>
+        <div class="user-list">
+          <table>
+            <thead>
+              <tr><th>User</th><th>Last price</th><th>Last update</th><th>Points</th><th>State</th></tr>
+            </thead>
+            <tbody id="reporterBody"><tr><td colspan="5" class="small">No data loaded yet.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Activity log</h2>
+        <div id="log"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    const P2FK_VER = 0x6f;
+    const P2FK_CHUNK = 20;
+    const P2FK_PAD = '#';
+    const P2FK_SIGVER = '88';
+    const DUST = 546;
+    const FEE_DEFAULT = 10;
+    const FEE_MIN = 2;
+    const CHANGE_COUNT = 2;
+    const CHANGE_PREFIX = 'sup:testnet3:change:';
+    const AMOUNT_PER = DUST / 1e8;
+    const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const DELIMITERS = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
+    const ADDR_RE = /^[mn][1-9A-HJ-NP-Za-km-z]{25,34}$/;
+    const TXID_RE = /^[0-9a-fA-F]{64}$/;
+    const CID_RE = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/i;
+    const IPFS_GWS = ['https://ipfs.io/ipfs/','https://dweb.link/ipfs/','https://w3s.link/ipfs/'];
+    const IPFS_PATH_RE = /^\/?ipfs\/([a-zA-Z0-9]+)(?:\/(.*))?$/i;
+    const FALLBACK_AVI = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" fill="%23182a45"/%3E%3Ctext x="50%25" y="56%25" dominant-baseline="middle" text-anchor="middle" font-family="system-ui" font-size="52" fill="%23a9bee6"%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E';
+
+    const COIN_PRESETS = {
+      BTC: { keyword: '#BTC', cgId: 'bitcoin' },
+      LTC: { keyword: '#LTC', cgId: 'litecoin' },
+      DOG: { keyword: '#DOG', cgId: 'dogecoin' },
+      XTZ: { keyword: '#XTZ', cgId: 'tezos' },
+      ETH: { keyword: '#ETH', cgId: 'ethereum' },
+    };
+
+    const QUOTE_CURRENCIES = {
+      USD: { cgId: 'usd', decimals: 2 },
+      EUR: { cgId: 'eur', decimals: 2 },
+      GBP: { cgId: 'gbp', decimals: 2 },
+      JPY: { cgId: 'jpy', decimals: 0 },
+      CAD: { cgId: 'cad', decimals: 2 },
+      AUD: { cgId: 'aud', decimals: 2 },
+      BTC: { cgId: 'btc', decimals: 8 },
+      ETH: { cgId: 'eth', decimals: 6 },
+      LTC: { cgId: 'ltc', decimals: 4 },
+    };
+
+    const S = {
+      priv: null,
+      addr: '',
+      keyring: null,
+      lastChangeOutputAddr: '',
+      kwCache: new Map(),
+      profileCache: new Map(),
+      profileReqCache: new Map(),
+      rateWindow: [],
+      liveTimer: null,
+      posting: false,
+      posterTimer: null,
+      lastPostAt: 0,
+      pointsByUser: new Map(),
+      currentRows: [],
+      chartMeta: { minY: 0, maxY: 1, minX: 0, maxX: 1 },
+      loading: false,
+    };
+
+    const $ = id => document.getElementById(id);
+    const sleep = ms => new Promise(res => setTimeout(res, ms));
+    const norm = v => typeof v === 'string' ? v.trim() : '';
+    const esc = t => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const sanitize = msg => norm(String(msg ?? '')).replace(/[<>]/g,' ');
+    const utf8len = v => new TextEncoder().encode(String(v ?? '')).length;
+    const isAddr = v => ADDR_RE.test(norm(v));
+
+    function appendLog(message, kind = 'info') {
+      const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+      const log = $('log');
+      const div = document.createElement('div');
+      div.textContent = line;
+      if (kind === 'good') div.style.color = '#bbf7df';
+      if (kind === 'warn') div.style.color = '#ffe0ab';
+      if (kind === 'bad') div.style.color = '#ffc4c4';
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function setStatus(id, text, kind = '') {
+      const el = $(id);
+      el.textContent = text;
+      el.className = `status${kind ? ` ${kind}` : ''}`;
+    }
+
+    function getApiBase() { return norm($('apiBaseInput').value) || 'https://p2fk.io'; }
+    function getMempoolApi() { return 'https://mempool.space/testnet/api'; }
+    function getRefreshSeconds() { return Math.max(10, Number($('refreshInput').value || 20) || 20); }
+
+    async function rateLimitedFetch(url, options = {}, timeout = 25000) {
+      const maxCalls = 50;
+      const windowMs = 10_000;
+      for (;;) {
+        const now = Date.now();
+        while (S.rateWindow.length && (now - S.rateWindow[0]) >= windowMs) S.rateWindow.shift();
+        if (S.rateWindow.length < maxCalls) break;
+        const waitMs = Math.max(20, windowMs - (now - S.rateWindow[0]) + 25);
+        await sleep(waitMs);
+      }
+      S.rateWindow.push(Date.now());
+
+      const ac = new AbortController();
+      const id = setTimeout(() => ac.abort(), timeout);
+      try {
+        return await fetch(url, { ...options, signal: ac.signal, cache: 'no-store' });
+      } finally {
+        clearTimeout(id);
+      }
+    }
+
+    async function fetchJson(url, timeout = 25000) {
+      const res = await rateLimitedFetch(url, {}, timeout);
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+      return res.json();
+    }
+
+    function parseMsg(text) {
+      const dec = String(text ?? '').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+      const clean = dec.replace(/<<[^>]+>>/g, '').trim();
+      return { clean };
+    }
+
+    function normalizeRoot(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const root = raw.Root || raw.root || raw;
+      const rawMsg = root.Message ?? root['Message'] ?? '';
+      const message = Array.isArray(rawMsg) ? rawMsg.join('\n') : String(rawMsg ?? '');
+      const signedBy = norm(root['Signed By'] ?? root.SignedBy ?? root.FromAddress ?? '');
+      const blockDate = root['Block Date'] ?? root.BlockDate ?? root.BlockDateUTC ?? '';
+      const txId = norm(root['Transaction Id'] ?? root.TransactionId ?? root['Transaction ID'] ?? root.TxId ?? '').toLowerCase();
+      const isPending = Boolean(root.Pending || raw.Pending || raw.IsPending || root.Mempool || (!blockDate && txId));
+      return { message, fromAddr: signedBy, blockDate, txId, isPending, raw: root };
+    }
+
+    function parsePricePoint(row, symbol) {
+      const clean = parseMsg(row.message).clean;
+      if (!clean) return null;
+      const sym = String(symbol || '').toUpperCase();
+      const hasTag = new RegExp(`(^|\\s)#?${sym}(\\b|$)`, 'i').test(clean);
+      if (!hasTag) return null;
+      const exact = clean.match(new RegExp(`#?${sym}[^0-9-]*(-?\\d+(?:\\.\\d+)?)`, 'i'));
+      const fallback = clean.match(/(-?\d+(?:\.\d+)?)/);
+      const rawPrice = Number(exact?.[1] || fallback?.[1]);
+      if (!Number.isFinite(rawPrice) || rawPrice <= 0) return null;
+      const ts = Date.parse(String(row.blockDate || ''));
+      const when = Number.isFinite(ts) ? ts : Date.now();
+      return { price: rawPrice, ts: when, pending: row.isPending, txId: row.txId };
+    }
+
+    function shortAddr(addr) { const t = norm(addr); return t.length > 16 ? `${t.slice(0,8)}…${t.slice(-5)}` : t; }
+    function parseTimestamp(v) { const t = Date.parse(String(v || '')); return Number.isFinite(t) ? t : 0; }
+    function colorForAddress(addr) {
+      let h = 0;
+      for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
+      return `hsl(${h % 360} 72% 60%)`;
+    }
+
+    function buildIpfsUrl(cid, path = '', gi = 0) {
+      const gw = IPFS_GWS[Math.abs(gi) % IPFS_GWS.length];
+      return `${gw}${cid}${path ? `/${path.replace(/^\/+/, '')}` : ''}`;
+    }
+
+    function extractIpfsParts(v) {
+      const input = norm(v);
+      if (!input) return null;
+      if (/^ipfs:/i.test(input)) {
+        const b = input.replace(/^ipfs:/i,'').replace(/^\/+/, '');
+        const [cr, ...ps] = b.split(/[\\/]+/).filter(Boolean);
+        const cid = norm(cr || '');
+        return CID_RE.test(cid) ? { cid, path: ps.join('/') } : null;
+      }
+      const loose = input.match(/(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[1-9A-HJ-NP-Za-km-z]{20,})(?:[\\/]+([^<>]+))?/i);
+      if (loose) return { cid: loose[1], path: norm(loose[2] || '') };
+      try {
+        const u = new URL(input);
+        const hs = norm(u.hostname).split('.ipfs.');
+        if (hs.length > 1 && CID_RE.test(hs[0])) return { cid: hs[0], path: norm(u.pathname).replace(/^\/+/, '') };
+        const pm = norm(u.pathname).match(IPFS_PATH_RE);
+        if (pm) return { cid: pm[1], path: norm(pm[2] || '') };
+      } catch {}
+      return null;
+    }
+
+    function profileImgCandidates(ref) {
+      const v = norm(ref);
+      if (!v) return [];
+      if (/^https?:\/\//i.test(v)) return [v];
+      const ipfs = extractIpfsParts(v);
+      if (ipfs?.cid) {
+        const cands = [];
+        IPFS_GWS.forEach((_, i) => cands.push(buildIpfsUrl(ipfs.cid, '', i)));
+        if (ipfs.path) IPFS_GWS.forEach((_, i) => cands.push(buildIpfsUrl(ipfs.cid, ipfs.path, i)));
+        return cands;
+      }
+      return [];
+    }
+
+    function profileImgUrl(ref) {
+      const cands = profileImgCandidates(ref);
+      return cands.length ? cands[0] : FALLBACK_AVI;
+    }
+
+    function normalizeProfile(raw, fallbackAddr = '') {
+      if (!raw || typeof raw !== 'object') return null;
+      const p = raw.profile || raw;
+      const rawCreators = p.Creators;
+      let creators = [];
+      if (Array.isArray(rawCreators)) creators = rawCreators.map(x => norm(x)).filter(Boolean);
+      else if (rawCreators && typeof rawCreators === 'object') {
+        const creatorVals = Object.values(rawCreators).map(x => norm(x)).filter(Boolean);
+        const creatorKeys = Object.keys(rawCreators).map(x => norm(x)).filter(Boolean);
+        creators = [...creatorVals.filter(isAddr), ...creatorKeys.filter(isAddr), ...creatorVals.filter(x => !isAddr(x))];
+      }
+      creators = [...new Set(creators)];
+      const addr = fallbackAddr || norm(raw.address || p.Address || p._address || creators[0] || '');
+      return {
+        addr,
+        creators,
+        urn: norm(p.URN || p.urn || p.DisplayName || ''),
+        displayName: norm(p.DisplayName || p.URN || p.urn || addr || 'Unknown'),
+        image: norm(p.Image || p.IMG || p.img || p.image || p.ProfileImage || p.profileImage || p.profileImageUrl || p.ImageUrl || ''),
+      };
+    }
+
+    async function fetchProfileByURN(urn, forceRefresh = false) {
+      const cleanUrn = norm(urn);
+      if (!cleanUrn) return null;
+      const key = `u:${cleanUrn}`;
+      if (!forceRefresh && S.profileCache.has(key)) return S.profileCache.get(key);
+      if (!forceRefresh && S.profileReqCache.has(key)) return S.profileReqCache.get(key);
+      const req = (async () => {
+        const r = await fetchJson(`${getApiBase()}/GetProfileByURN/${encodeURIComponent(cleanUrn)}?mainnet=false`);
+        const p = normalizeProfile(Array.isArray(r) ? r[0] : r);
+        if (p) {
+          S.profileCache.set(key, p);
+          if (p.addr) S.profileCache.set(`a:${p.addr}`, p);
+        }
+        return p;
+      })();
+      if (!forceRefresh) {
+        S.profileReqCache.set(key, req);
+        req.finally(() => S.profileReqCache.delete(key));
+      }
+      return req;
+    }
+
+    async function fetchProfileByAddr(addr) {
+      const key = `a:${addr}`;
+      if (S.profileCache.has(key)) return S.profileCache.get(key);
+      if (S.profileReqCache.has(key)) return S.profileReqCache.get(key);
+      const req = (async () => {
+        const r = await fetchJson(`${getApiBase()}/GetProfileByAddress/${encodeURIComponent(addr)}?mainnet=false`);
+        let p = normalizeProfile(Array.isArray(r) ? r[0] : r, addr);
+        if (p?.urn) {
+          try {
+            const byUrn = await fetchProfileByURN(p.urn, true);
+            if (byUrn?.image && !p.image) p = { ...p, image: byUrn.image };
+            const addrCreator = norm(p?.creators?.[0] || '');
+            const urnCreator = norm(byUrn?.creators?.[0] || '');
+            const ownerMismatch = Boolean(byUrn?.addr && byUrn.addr !== p.addr);
+            const creatorMismatch = Boolean(addrCreator && urnCreator && addrCreator !== urnCreator);
+            p = { ...p, isClaimedProfile: ownerMismatch || creatorMismatch, officialAddr: norm(byUrn?.addr || '') };
+          } catch {}
+        }
+        if (p) S.profileCache.set(key, p);
+        return p;
+      })().finally(() => S.profileReqCache.delete(key));
+      S.profileReqCache.set(key, req);
+      return req;
+    }
+
+    function parseHashtags(msg) {
+      const m = norm(msg).match(/#[^\s]{1,64}/g) || [];
+      return [...new Set(m.map(t => t.replace(/^#+/, '').trim()).filter(Boolean))];
+    }
+
+    function b2bi(b) { let v = 0n; for (const x of b) v = (v << 8n) | BigInt(x); return v; }
+    function bi2b32(n) { const o = new Uint8Array(32); for (let i = 31; i >= 0; i--) { o[i] = Number(n & 0xffn); n >>= 8n; } return o; }
+    function b2h(b) { return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''); }
+    function h2b(h) { const o = new Uint8Array(h.length / 2); for (let i = 0; i < o.length; i++) o[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16); return o; }
+    async function sha256(b) { return new Uint8Array(await crypto.subtle.digest('SHA-256', b)); }
+    async function sha256hex(t) { return b2h(await sha256(new TextEncoder().encode(t))); }
+    function encVI(n) { if (n < 0xfd) return new Uint8Array([n]); if (n <= 0xffff) return new Uint8Array([0xfd, n & 0xff, (n >> 8) & 0xff]); return new Uint8Array([0xfe, n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >>> 24) & 0xff]); }
+
+    async function msgHash(text) {
+      const magic = new TextEncoder().encode('Bitcoin Signed Message:\n');
+      const msg = new TextEncoder().encode(text);
+      const ml = encVI(msg.length);
+      const env = new Uint8Array(1 + magic.length + ml.length + msg.length);
+      env[0] = magic.length;
+      env.set(magic, 1);
+      env.set(ml, 1 + magic.length);
+      env.set(msg, 1 + magic.length + ml.length);
+      return sha256(await sha256(env));
+    }
+
+    function encB58(b) {
+      if (!(b instanceof Uint8Array)) b = new Uint8Array(b);
+      let z = 0; while (z < b.length && b[z] === 0) z++;
+      let v = 0n; for (const x of b) v = (v << 8n) + BigInt(x);
+      let s = '';
+      while (v > 0n) { const r = Number(v % 58n); v /= 58n; s = B58[r] + s; }
+      return B58[0].repeat(z) + (s || (z ? '' : B58[0]));
+    }
+
+    async function encB58C(b) {
+      const p = b instanceof Uint8Array ? b : new Uint8Array(b);
+      const h = await sha256(await sha256(p));
+      const out = new Uint8Array(p.length + 4);
+      out.set(p);
+      out.set(h.slice(0, 4), p.length);
+      return encB58(out);
+    }
+
+    function decB58(s) {
+      let n = 0n;
+      for (const c of s) {
+        const i = B58.indexOf(c);
+        if (i < 0) throw new Error('Invalid base58');
+        n = n * 58n + BigInt(i);
+      }
+      let z = 0;
+      for (const c of s) { if (c !== B58[0]) break; z++; }
+      const out = [];
+      while (n > 0n) { out.unshift(Number(n & 0xffn)); n >>= 8n; }
+      return new Uint8Array([...new Array(z).fill(0), ...out]);
+    }
+
+    async function decB58C(s) {
+      const r = decB58(s);
+      if (r.length < 5) throw new Error('Base58Check payload too short');
+      const p = r.slice(0, -4);
+      const c = r.slice(-4);
+      const h = await sha256(await sha256(p));
+      for (let i = 0; i < 4; i++) if (c[i] !== h[i]) throw new Error('Invalid checksum');
+      return p;
+    }
+
+    const P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
+    const N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+    const Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
+    const Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
+    const sP = n => ((n % P) + P) % P;
+    const sN = n => ((n % N) + N) % N;
+    function sInv(a, m) { let [r, s, rr, ss] = [m, 0n, ((a % m) + m) % m, 1n]; while (rr !== 0n) { const q = r / rr; [r, s, rr, ss] = [rr, ss, r - q * rr, s - q * ss]; } return ((s % m) + m) % m; }
+    function jDbl(X, Y, Z) { if (Y === 0n) return [0n, 1n, 0n]; const Y2 = sP(Y * Y), S2 = sP(4n * X * Y2), M = sP(3n * X * X), X2 = sP(M * M - 2n * S2); return [X2, sP(M * (S2 - X2) - 8n * Y2 * Y2), sP(2n * Y * Z)]; }
+    function jAdd(X1, Y1, Z1, X2, Y2, Z2) { if (Z1 === 0n) return [X2, Y2, Z2]; if (Z2 === 0n) return [X1, Y1, Z1]; const z1s = sP(Z1 * Z1), z2s = sP(Z2 * Z2), U1 = sP(X1 * z2s), U2 = sP(X2 * z1s), S1 = sP(Y1 * z2s * Z2), S2 = sP(Y2 * z1s * Z1), H = sP(U2 - U1), R = sP(S2 - S1); if (H === 0n) return R === 0n ? jDbl(X1, Y1, Z1) : [0n, 1n, 0n]; const Hs = sP(H * H), Hc = sP(H * Hs), X3 = sP(R * R - Hc - 2n * U1 * Hs); return [X3, sP(R * (U1 * Hs - X3) - S1 * Hc), sP(H * Z1 * Z2)]; }
+    function jAff(X, Y, Z) { const zi = sInv(Z, P), zi2 = sP(zi * zi); return [sP(X * zi2), sP(Y * sP(zi2 * zi))]; }
+    function sMul(k) { let [rx, ry, rz] = [0n, 1n, 0n], [ax, ay, az] = [Gx, Gy, 1n], sc = ((k % N) + N) % N; while (sc > 0n) { if (sc & 1n) [rx, ry, rz] = jAdd(rx, ry, rz, ax, ay, az); [ax, ay, az] = jDbl(ax, ay, az); sc >>= 1n; } return [rx, ry, rz]; }
+    function priv2pub(pb) { const [jx, jy, jz] = sMul(b2bi(pb)); const [x, y] = jAff(jx, jy, jz); return new Uint8Array([(y & 1n) ? 0x03 : 0x02, ...bi2b32(x)]); }
+
+    async function rfc6979k(priv, mh) {
+      const hmac = async (key, ...parts) => {
+        const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+        const size = parts.reduce((sum, p) => sum + p.length, 0);
+        const msg = new Uint8Array(size);
+        let off = 0;
+        for (const p of parts) { msg.set(p, off); off += p.length; }
+        return new Uint8Array(await crypto.subtle.sign('HMAC', k, msg));
+      };
+      let V = new Uint8Array(32).fill(1), K = new Uint8Array(32).fill(0);
+      K = await hmac(K, V, new Uint8Array([0]), priv, mh); V = await hmac(K, V);
+      K = await hmac(K, V, new Uint8Array([1]), priv, mh); V = await hmac(K, V);
+      for (;;) { V = await hmac(K, V); const k = b2bi(V); if (k >= 1n && k < N) return k; K = await hmac(K, V, new Uint8Array([0])); V = await hmac(K, V); }
+    }
+
+    async function ecSign(priv, mhb) {
+      const d = b2bi(priv), z = b2bi(mhb), k = await rfc6979k(priv, mhb);
+      const [rx, ry] = jAff(...sMul(k));
+      const r = sN(rx);
+      let s = sN(sInv(k, N) * (z + r * d));
+      let rid = Number(ry & 1n) | (rx >= N ? 2 : 0);
+      if (s > N / 2n) { s = N - s; rid ^= 1; }
+      return { r, s, recoveryId: rid };
+    }
+
+    function derEnc(r, s) {
+      const mb = n => {
+        const b = [];
+        let t = n;
+        while (t > 0n) { b.unshift(Number(t & 0xffn)); t >>= 8n; }
+        if (b[0] & 0x80) b.unshift(0);
+        return b;
+      };
+      const rb = mb(r), sb = mb(s);
+      return new Uint8Array([0x30, rb.length + sb.length + 4, 0x02, rb.length, ...rb, 0x02, sb.length, ...sb]);
+    }
+
+    function ripemd160(data) {
+      const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(data);
+      const rl32 = (x, n) => (x << n) | (x >>> (32 - n));
+      const ff = (j, x, y, z) => j < 16 ? x ^ y ^ z : j < 32 ? (x & y) | (~x & z) : j < 48 ? (x | ~y) ^ z : j < 64 ? (x & z) | (y & ~z) : x ^ (y | ~z);
+      const KL = [0, 0x5A827999, 0x6ED9EBA1, 0x8F1BBCDC, 0xA953FD4E];
+      const KR = [0x50A28BE6, 0x5C4DD124, 0x6D703EF3, 0x7A6D76E9, 0];
+      const RL = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,7,4,13,1,10,6,15,3,12,0,9,5,2,14,11,8,3,10,14,4,9,15,8,1,2,7,0,6,13,11,5,12,1,9,11,10,0,8,12,4,13,3,7,15,14,5,6,2,4,0,5,9,7,12,2,10,14,1,3,8,11,6,15,13];
+      const RR = [5,14,7,0,9,2,11,4,13,6,15,8,1,10,3,12,6,11,3,7,0,13,5,10,14,15,8,12,4,9,1,2,15,5,1,3,7,14,6,9,11,8,12,2,10,0,4,13,8,6,4,1,3,11,15,0,5,12,2,13,9,7,10,14,12,15,10,4,1,5,8,7,6,2,13,14,0,3,9,11];
+      const SL = [11,14,15,12,5,8,7,9,11,13,14,15,6,7,9,8,7,6,8,13,11,9,7,15,7,12,15,9,11,7,13,12,11,13,6,7,14,9,13,15,14,8,13,6,5,12,7,5,11,12,14,15,14,15,9,8,9,14,5,6,8,6,5,12,9,15,5,11,6,8,13,12,5,12,13,14,11,8,5,6];
+      const SR = [8,9,9,11,13,15,15,5,7,7,8,11,14,14,12,6,9,13,15,7,12,8,9,11,7,7,12,7,6,15,13,11,9,7,15,11,8,6,6,14,12,13,5,14,13,13,7,5,15,5,8,11,14,14,6,14,6,9,12,9,12,5,15,8,8,5,12,9,12,5,14,6,8,13,6,5,15,13,11,11];
+      const ml = bytes.length, pl = ml % 64 < 56 ? 56 - (ml % 64) : 120 - (ml % 64);
+      const pd = new Uint8Array(ml + pl + 8); pd.set(bytes); pd[ml] = 0x80;
+      const bl = ml * 8; for (let i = 0; i < 4; i++) pd[ml + pl + i] = (bl >>> (i * 8)) & 0xff;
+      const view = new DataView(pd.buffer);
+      let h0 = 0x67452301, h1 = 0xEFCDAB89, h2 = 0x98BADCFE, h3 = 0x10325476, h4 = 0xC3D2E1F0;
+      for (let off = 0; off < pd.length; off += 64) {
+        const X = Array.from({ length: 16 }, (_, i) => view.getUint32(off + i * 4, true));
+        let al = h0, bl_ = h1, cl = h2, dl = h3, el = h4, ar = h0, br = h1, cr = h2, dr = h3, er = h4;
+        for (let j = 0; j < 80; j++) {
+          const qi = j >> 4;
+          let t = (rl32((al + ff(j, bl_, cl, dl) + X[RL[j]] + KL[qi]) | 0, SL[j]) + el) | 0;
+          al = el; el = dl; dl = rl32(cl, 10); cl = bl_; bl_ = t;
+          t = (rl32((ar + ff(79 - j, br, cr, dr) + X[RR[j]] + KR[qi]) | 0, SR[j]) + er) | 0;
+          ar = er; er = dr; dr = rl32(cr, 10); cr = br; br = t;
+        }
+        const t = (h1 + cl + dr) | 0;
+        h1 = (h2 + dl + er) | 0; h2 = (h3 + el + ar) | 0; h3 = (h4 + al + br) | 0; h4 = (h0 + bl_ + cr) | 0; h0 = t;
+      }
+      const out = new Uint8Array(20), dv = new DataView(out.buffer);
+      [h0, h1, h2, h3, h4].forEach((v, i) => dv.setUint32(i * 4, v, true));
+      return out;
+    }
+
+    async function wif2priv(wif) {
+      const p = await decB58C(norm(wif));
+      if (p[0] !== 0xef) throw new Error('Only testnet3 WIF supported');
+      if (p.length === 34) return p.slice(1, 33);
+      if (p.length === 33) return p.slice(1);
+      throw new Error('Unexpected WIF length');
+    }
+
+    async function priv2addr(pb) {
+      const pub = priv2pub(pb), h = ripemd160(await sha256(pub));
+      return encB58C(new Uint8Array([P2FK_VER, ...h]));
+    }
+
+    async function deriveChangeKey(base, label) {
+      const seedPfx = new TextEncoder().encode(`${CHANGE_PREFIX}${norm(label)}:`);
+      const bsc = b2bi(base);
+      const ctr = new Uint8Array(4);
+      for (let c = 0; c <= 0xffffffff; c++) {
+        ctr[0] = (c >>> 24) & 0xff; ctr[1] = (c >>> 16) & 0xff; ctr[2] = (c >>> 8) & 0xff; ctr[3] = c & 0xff;
+        const seed = new Uint8Array(seedPfx.length + base.length + 4);
+        seed.set(seedPfx); seed.set(base, seedPfx.length); seed.set(ctr, seedPfx.length + base.length);
+        const tw = sN(b2bi(await sha256(seed)));
+        if (tw === 0n) continue;
+        const d = sN(bsc + tw);
+        if (d === 0n) continue;
+        return bi2b32(d);
+      }
+      throw new Error('Could not derive change key');
+    }
+
+    function buildP2PKH(h160) { return new Uint8Array([0x76, 0xa9, 0x14, ...h160, 0x88, 0xac]); }
+
+    async function addrPayout(addr) {
+      const p = await decB58C(norm(addr));
+      if (p.length !== 21 || p[0] !== 0x6f) throw new Error(`Not a testnet3 legacy address: ${addr}`);
+      return buildP2PKH(p.slice(1));
+    }
+
+    async function buildSignerEntry(pb, label) {
+      const pub = priv2pub(pb), h = ripemd160(await sha256(pub)), addr = await encB58C(new Uint8Array([P2FK_VER, ...h]));
+      return { label, pb, pub, script: buildP2PKH(h), addr };
+    }
+
+    async function buildKeyring(base) {
+      const main = await buildSignerEntry(base, 'main');
+      const changes = [];
+      for (let i = 0; i < CHANGE_COUNT; i++) {
+        const d = await deriveChangeKey(base, `slot-${i + 1}`);
+        changes.push(await buildSignerEntry(d, `change-${i + 1}`));
+      }
+      return { main, changes, all: [main, ...changes] };
+    }
+
+    function serializeTx(inputs, outputs, sigIdx = -1, sigScript = null) {
+      const u32 = v => [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff];
+      const u64 = v => { const n = BigInt(Math.round(v)); return [...u32(Number(n & 0xffffffffn)), ...u32(Number((n >> 32n) & 0xffffffffn))]; };
+      const vi = n => n < 0xfd ? [n] : n <= 0xffff ? [0xfd, n & 0xff, (n >> 8) & 0xff] : [0xfe, n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >>> 24) & 0xff];
+      const out = [...u32(1), ...vi(inputs.length)];
+      for (let i = 0; i < inputs.length; i++) {
+        out.push(...Array.from(h2b(inputs[i].txid)).reverse(), ...u32(inputs[i].vout));
+        const sc = sigIdx >= 0 ? (i === sigIdx ? sigScript : new Uint8Array([])) : inputs[i].scriptSig || new Uint8Array([]);
+        out.push(...vi(sc.length), ...sc, ...u32(0xffffffff));
+      }
+      out.push(...vi(outputs.length));
+      for (const o of outputs) out.push(...u64(o.sat), ...vi(o.script.length), ...o.script);
+      out.push(...u32(0));
+      return new Uint8Array(out);
+    }
+
+    async function buildTx(utxos, outputs) {
+      const inputs = utxos.map(u => ({ txid: u.txid, vout: u.vout, signer: u.signer, scriptSig: new Uint8Array([]) }));
+      const finalOuts = await Promise.all(outputs.map(async o => ({ sat: o.sat, script: await addrPayout(o.addr) })));
+      for (let i = 0; i < inputs.length; i++) {
+        const sg = inputs[i].signer;
+        const pre = new Uint8Array([...serializeTx(inputs, finalOuts, i, sg.script), 1, 0, 0, 0]);
+        const sh = await sha256(await sha256(pre));
+        const { r, s } = await ecSign(sg.pb, sh);
+        const der = derEnc(r, s);
+        inputs[i].scriptSig = new Uint8Array([der.length + 1, ...der, 0x01, sg.pub.length, ...sg.pub]);
+      }
+      return b2h(serializeTx(inputs, finalOuts));
+    }
+
+    async function broadcastTx(outputs) {
+      if (!S.priv) throw new Error('Wallet is locked');
+      const kr = S.keyring || await buildKeyring(S.priv);
+      if (!S.keyring) S.keyring = kr;
+      const [cA, cB] = kr.changes;
+
+      const utxoGroups = await Promise.all(kr.all.map(async sg => {
+        const res = await rateLimitedFetch(`${getMempoolApi()}/address/${encodeURIComponent(sg.addr)}/utxo`);
+        if (!res.ok) throw new Error(`UTXO fetch failed for ${sg.label}`);
+        const items = await res.json();
+        return items.filter(u => u.status?.confirmed).map(u => ({ ...u, srcAddr: sg.addr, signer: sg }));
+      }));
+
+      const allUtxos = utxoGroups.flat();
+      if (!allUtxos.length) throw new Error('No confirmed UTXOs found');
+
+      let feeRate = FEE_DEFAULT;
+      try {
+        const fr = await fetchJson(`${getMempoolApi()}/v1/fees/recommended`);
+        feeRate = Math.max(Number(fr?.halfHourFee || FEE_DEFAULT), FEE_MIN);
+      } catch {}
+
+      const estFee = (inputs, outputsCount) => Math.ceil((10 + 148 * inputs + 34 * outputsCount) * feeRate);
+      const outSats = outputs.map(o => ({ addr: o.addr, sat: Math.round(o.amount * 1e8) }));
+      const totalOut = outSats.reduce((s, o) => s + o.sat, 0);
+      const totalsByAddr = kr.all.reduce((m, sg) => m.set(sg.addr, 0), new Map());
+      allUtxos.forEach(u => totalsByAddr.set(u.srcAddr, (totalsByAddr.get(u.srcAddr) || 0) + Number(u.value || 0)));
+
+      const candidates = [kr.main, cA, cB].sort((a, b) => (totalsByAddr.get(b.addr) || 0) - (totalsByAddr.get(a.addr) || 0));
+      let selected = null, selectedUtxos = [], selectedTotal = 0;
+
+      for (const src of candidates) {
+        const pool = allUtxos.filter(u => u.srcAddr === src.addr).sort((a, b) => b.value - a.value);
+        let local = [], total = 0;
+        for (const u of pool) {
+          local.push(u); total += u.value;
+          if (total >= totalOut + estFee(local.length, outSats.length + 1)) {
+            selected = src; selectedUtxos = local; selectedTotal = total; break;
+          }
+        }
+        if (selectedUtxos.length) break;
+      }
+
+      if (!selectedUtxos.length) throw new Error('Insufficient funds across main and change addresses');
+      const fee = estFee(selectedUtxos.length, outSats.length + 1);
+      const change = selectedTotal - totalOut - fee;
+      if (change < 0) throw new Error('Insufficient balance after fee');
+
+      let changeAddr = cA.addr;
+      if (selected) {
+        if (selected.addr === cA.addr) changeAddr = cB.addr;
+        else if (selected.addr === cB.addr) changeAddr = cA.addr;
+        else changeAddr = S.lastChangeOutputAddr === cA.addr ? cB.addr : cA.addr;
+      }
+      S.lastChangeOutputAddr = changeAddr;
+
+      const finalOuts = [...outSats];
+      if (change >= DUST) finalOuts.push({ addr: changeAddr, sat: change });
+
+      const rawHex = await buildTx(selectedUtxos, finalOuts);
+      const res = await rateLimitedFetch(`${getMempoolApi()}/tx`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: rawHex });
+      if (!res.ok) throw new Error(`Broadcast failed: ${await res.text()}`);
+      return (await res.text()).trim();
+    }
+
+    function randDelim() {
+      const b = new Uint8Array(1), lim = Math.floor(256 / DELIMITERS.length) * DELIMITERS.length;
+      let v = 0;
+      do { crypto.getRandomValues(b); v = b[0]; } while (v >= lim);
+      return DELIMITERS[v % DELIMITERS.length];
+    }
+
+    function randSalt() { const b = new Uint32Array(1); crypto.getRandomValues(b); return -(b[0] % 100000); }
+
+    async function signMsg(text) {
+      if (!S.priv) throw new Error('Wallet locked');
+      const mh = await msgHash(text);
+      const { r, s, recoveryId } = await ecSign(S.priv, mh);
+      const c = new Uint8Array(65);
+      c[0] = 27 + 4 + recoveryId;
+      c.set(bi2b32(r), 1);
+      c.set(bi2b32(s), 33);
+      return btoa(String.fromCharCode(...c));
+    }
+
+    async function deriveKeywordAddress(keyword) {
+      const tok = norm(keyword).replace(/^#/, '');
+      const b = new TextEncoder().encode(tok);
+      const p = new Uint8Array(21);
+      p[0] = P2FK_VER;
+      p.fill(P2FK_PAD.charCodeAt(0), 1);
+      if (b.length) p.set(b.slice(0, P2FK_CHUNK), 1);
+      return encB58C(p);
+    }
+
+    async function kwAddr(keyword) {
+      const tok = norm(keyword).replace(/^#/, '').toUpperCase();
+      if (!tok) return '';
+      if (S.kwCache.has(tok)) return S.kwCache.get(tok);
+      const addr = await deriveKeywordAddress(tok);
+      S.kwCache.set(tok, addr);
+      return addr;
+    }
+
+    async function encP2FK(payload, ver = P2FK_VER) {
+      const b = new TextEncoder().encode(payload);
+      const addrs = [], seen = new Set();
+      for (let i = 0; i < b.length; i += P2FK_CHUNK) {
+        const chunk = b.slice(i, i + P2FK_CHUNK);
+        const padded = new Uint8Array(P2FK_CHUNK);
+        padded.fill(P2FK_PAD.charCodeAt(0));
+        padded.set(chunk);
+        const ab = new Uint8Array(1 + P2FK_CHUNK);
+        ab[0] = ver;
+        ab.set(padded, 1);
+        const enc = await encB58C(ab);
+        if (!seen.has(enc)) { seen.add(enc); addrs.push(enc); }
+      }
+      return addrs;
+    }
+
+    async function buildMsgOutputs({ text, fromAddr }) {
+      const safe = sanitize(text);
+      const delim = randDelim();
+      const payload = `${safe}<<${randSalt()}>>`;
+      const unsObj = `${delim}${utf8len(payload)}${delim}${payload}`;
+      const sigHash = (await sha256hex(unsObj)).toUpperCase();
+      const sig = await signMsg(sigHash);
+      const signed = `SIG${delim}${P2FK_SIGVER}${delim}${sig}${unsObj}`;
+      const encAddrs = await encP2FK(signed);
+      const rset = new Set(encAddrs);
+      await addrPayout(fromAddr);
+      for (const kw of parseHashtags(safe)) rset.add(await kwAddr(kw));
+      rset.add(fromAddr);
+      return [...rset].map(addr => ({ addr, amount: AMOUNT_PER }));
+    }
+
+    async function getBalance(addr) {
+      const p = await fetchJson(`${getMempoolApi()}/address/${encodeURIComponent(addr)}`);
+      const cs = p?.chain_stats || {};
+      const ms = p?.mempool_stats || {};
+      return {
+        confirmed: (Number(cs.funded_txo_sum || 0) - Number(cs.spent_txo_sum || 0)) - Number(ms.spent_txo_sum || 0),
+        unconfirmed: Number(ms.funded_txo_sum || 0),
+      };
+    }
+
+    async function refreshWalletInfo() {
+      if (!S.priv || !S.keyring) {
+        $('walletInfo').innerHTML = 'No unlocked wallet.';
+        return { confirmed: 0, unconfirmed: 0 };
+      }
+      const balances = await Promise.all(S.keyring.all.map(async sg => ({
+        label: sg.label,
+        addr: sg.addr,
+        bal: await getBalance(sg.addr),
+      })));
+      const confirmed = balances.reduce((s, x) => s + x.bal.confirmed, 0);
+      const unconfirmed = balances.reduce((s, x) => s + x.bal.unconfirmed, 0);
+      $('walletInfo').innerHTML = balances.map(x => `${esc(x.label)} · <code>${esc(shortAddr(x.addr))}</code> · ${(x.bal.confirmed / 1e8).toFixed(8)} tBTC confirmed`).join('<br>');
+      setStatus('walletStatus', `Wallet unlocked as ${S.addr}. Confirmed ${(confirmed / 1e8).toFixed(8)} tBTC, unconfirmed ${(unconfirmed / 1e8).toFixed(8)} tBTC.`, 'good');
+      return { confirmed, unconfirmed };
+    }
+
+    async function unlockWallet() {
+      const wif = norm($('wifInput').value);
+      if (!wif) throw new Error('Enter a testnet3 WIF key.');
+      S.priv = await wif2priv(wif);
+      S.addr = await priv2addr(S.priv);
+      S.keyring = await buildKeyring(S.priv);
+      appendLog(`Wallet unlocked: ${S.addr}`, 'good');
+      await refreshWalletInfo();
+    }
+
+    function clearWallet() {
+      S.priv = null;
+      S.addr = '';
+      S.keyring = null;
+      S.posting = false;
+      if (S.posterTimer) clearTimeout(S.posterTimer);
+      setStatus('walletStatus', 'Wallet locked.');
+      $('walletInfo').innerHTML = 'No unlocked wallet.';
+      $('wifInput').value = '';
+    }
+
+    function getSelectedSymbol() { return norm($('coinSelect').value || 'BTC').toUpperCase(); }
+    function getSelectedQuote() { return norm($('quoteCurrencySelect').value || 'USD').toUpperCase(); }
+
+    async function fetchCoinPrice(compoundSymbol) {
+      const dashIdx = compoundSymbol.indexOf('-');
+      const baseSymbol = dashIdx >= 0 ? compoundSymbol.slice(0, dashIdx) : compoundSymbol;
+      const quoteSymbol = dashIdx >= 0 ? compoundSymbol.slice(dashIdx + 1) : 'USD';
+      const basePreset = COIN_PRESETS[baseSymbol] || COIN_PRESETS.BTC;
+      const quotePreset = QUOTE_CURRENCIES[quoteSymbol] || QUOTE_CURRENCIES.USD;
+      const base = norm($('priceApiInput').value) || 'https://api.coingecko.com/api/v3/simple/price';
+      const url = `${base}?ids=${encodeURIComponent(basePreset.cgId)}&vs_currencies=${encodeURIComponent(quotePreset.cgId)}`;
+      const payload = await fetchJson(url, 20000);
+      const value = Number(payload?.[basePreset.cgId]?.[quotePreset.cgId]);
+      if (!Number.isFinite(value) || value <= 0) throw new Error(`Invalid ${compoundSymbol} price response.`);
+      return { price: value, decimals: quotePreset.decimals };
+    }
+
+    async function fetchRecentKeywordRows(keyword) {
+      const cleanKeyword = norm(keyword).replace(/^#/, '').toUpperCase();
+      if (!cleanKeyword) throw new Error('Keyword is required.');
+      const addr = await kwAddr(cleanKeyword);
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      const rows = [];
+      for (let page = 0; page < 3; page++) {
+        const qty = 120;
+        const skip = page * qty;
+        const data = await fetchJson(`${getApiBase()}/GetPublicMessagesByAddress/${encodeURIComponent(addr)}?mainnet=false&skip=${skip}&qty=${qty}`, 30000);
+        const normalized = (Array.isArray(data) ? data : []).map(normalizeRoot).filter(Boolean);
+        if (!normalized.length) break;
+        rows.push(...normalized);
+        const oldest = normalized.reduce((min, row) => {
+          const ts = parseTimestamp(row.blockDate);
+          return ts ? Math.min(min, ts) : min;
+        }, Date.now());
+        if (oldest < cutoff) break;
+        if (normalized.length < qty) break;
+      }
+      const seen = new Set();
+      const deduped = [];
+      for (const row of rows) {
+        const key = row.txId || `${row.fromAddr}|${row.blockDate}|${row.message}`;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(row);
+      }
+      return { rows: deduped, keywordAddress: addr };
+    }
+
+    async function loadAndRender() {
+      if (S.loading) return;
+      S.loading = true;
+      try {
+        const keyword = norm($('keywordInput').value) || '#BTC';
+        const symbol = norm(keyword).replace(/^#/, '').toUpperCase();
+        setStatus('searchStatus', `Loading recent ${keyword} messages…`);
+
+        const { rows, keywordAddress } = await fetchRecentKeywordRows(keyword);
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const grouped = new Map();
+
+        for (const row of rows) {
+          const point = parsePricePoint(row, symbol);
+          if (!point) continue;
+          if (point.ts < cutoff) continue;
+          const addr = norm(row.fromAddr);
+          if (!isAddr(addr)) continue;
+          if (!grouped.has(addr)) grouped.set(addr, []);
+          grouped.get(addr).push(point);
+        }
+
+        for (const [addr, pts] of grouped) pts.sort((a, b) => a.ts - b.ts);
+        S.pointsByUser = grouped;
+
+        const addresses = [...grouped.keys()];
+        await Promise.all(addresses.map(async addr => {
+          try { await fetchProfileByAddr(addr); } catch {}
+        }));
+
+        const allPoints = [...grouped.values()].flat();
+        const confirmed = allPoints.filter(p => !p.pending).length;
+        const pending = allPoints.filter(p => p.pending).length;
+
+        const sortedRows = addresses.map(addr => {
+          const pts = grouped.get(addr) || [];
+          const last = pts[pts.length - 1] || null;
+          const profile = S.profileCache.get(`a:${addr}`) || null;
+          return { addr, pts, last, profile };
+        }).sort((a, b) => (b.last?.ts || 0) - (a.last?.ts || 0));
+
+        S.currentRows = sortedRows;
+        renderReporterTable();
+        renderSummary({
+          keyword,
+          keywordAddress,
+          reporters: grouped.size,
+          points: allPoints.length,
+          confirmed,
+          pending,
+        });
+        drawChart();
+
+        setStatus('searchStatus', `Loaded ${allPoints.length} points from ${grouped.size} reporters for ${keyword}.`, 'good');
+      } catch (error) {
+        appendLog(`Refresh failed: ${error.message || error}`, 'bad');
+        setStatus('searchStatus', error.message || 'Refresh failed.', 'bad');
+      } finally {
+        S.loading = false;
+      }
+    }
+
+    function renderSummary(meta) {
+      $('summaryMeta').innerHTML = [
+        ['Keyword', meta.keyword],
+        ['Keyword address', shortAddr(meta.keywordAddress)],
+        ['Reporters', meta.reporters],
+        ['Points (24h)', meta.points],
+        ['Confirmed', meta.confirmed],
+        ['Pending', meta.pending],
+      ].map(([k, v]) => `<div><span class="small">${esc(k)}</span><b>${esc(String(v))}</b></div>`).join('');
+    }
+
+    function buildDisplayName(profile, addr) {
+      if (!profile) return shortAddr(addr);
+      const urn = norm(profile.urn).replace(/^@+/, '');
+      const base = urn ? `@${urn}` : (profile.displayName || shortAddr(addr));
+      return profile.isClaimedProfile ? `⚠ ${base}` : base;
+    }
+
+    function renderReporterTable() {
+      const body = $('reporterBody');
+      if (!S.currentRows.length) {
+        body.innerHTML = '<tr><td colspan="5" class="small">No matching price messages in the last 24 hours.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = S.currentRows.map(row => {
+        const profile = row.profile || S.profileCache.get(`a:${row.addr}`);
+        const avatar = profileImgUrl(profile?.image || '');
+        const name = buildDisplayName(profile, row.addr);
+        const state = row.last?.pending ? 'pending' : 'confirmed';
+        return `<tr>
+          <td>
+            <div class="user">
+              <img class="avatar" src="${esc(avatar)}" alt="avatar" loading="lazy">
+              <div class="user-main"><b>${esc(name)}</b><span>${esc(shortAddr(row.addr))}</span></div>
+            </div>
+          </td>
+          <td>${row.last ? esc(String(row.last.price)) : '—'}</td>
+          <td>${row.last ? esc(new Date(row.last.ts).toLocaleString()) : '—'}</td>
+          <td>${row.pts.length}</td>
+          <td>${state}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function drawChart() {
+      const canvas = $('chart');
+      const parent = canvas.parentElement;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const width = Math.max(320, Math.floor(parent.clientWidth));
+      const height = Math.max(260, Math.floor(parent.clientHeight));
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const pad = { l: 62, r: 16, t: 16, b: 30 };
+      const plotW = width - pad.l - pad.r;
+      const plotH = height - pad.t - pad.b;
+      if (plotW <= 10 || plotH <= 10) return;
+
+      const now = Date.now();
+      const minX = now - 24 * 60 * 60 * 1000;
+      const maxX = now;
+      const points = [...S.pointsByUser.values()].flat();
+      let minY = Math.min(...points.map(p => p.price));
+      let maxY = Math.max(...points.map(p => p.price));
+      if (!Number.isFinite(minY) || !Number.isFinite(maxY)) {
+        minY = 0; maxY = 1;
+      }
+      if (minY === maxY) { minY *= 0.995; maxY *= 1.005; if (minY === maxY) maxY = minY + 1; }
+      const padY = (maxY - minY) * 0.08;
+      minY -= padY;
+      maxY += padY;
+      S.chartMeta = { minY, maxY, minX, maxX };
+
+      const xOf = t => pad.l + ((t - minX) / (maxX - minX)) * plotW;
+      const yOf = v => pad.t + (1 - (v - minY) / (maxY - minY)) * plotH;
+
+      ctx.fillStyle = '#091224';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = 'rgba(107,140,194,.2)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 6; i++) {
+        const y = pad.t + (plotH * i / 6);
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(width - pad.r, y); ctx.stroke();
+      }
+      for (let i = 0; i <= 6; i++) {
+        const x = pad.l + (plotW * i / 6);
+        ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, height - pad.b); ctx.stroke();
+      }
+
+      ctx.fillStyle = '#9fb1d4';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'right';
+      for (let i = 0; i <= 6; i++) {
+        const value = maxY - ((maxY - minY) * i / 6);
+        const y = pad.t + (plotH * i / 6);
+        ctx.fillText(value.toFixed(value >= 1000 ? 0 : value >= 10 ? 2 : 5), pad.l - 7, y + 4);
+      }
+
+      ctx.textAlign = 'center';
+      for (let i = 0; i <= 6; i++) {
+        const ts = minX + ((maxX - minX) * i / 6);
+        const x = pad.l + (plotW * i / 6);
+        const d = new Date(ts);
+        ctx.fillText(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`, x, height - 8);
+      }
+
+      for (const [addr, ptsRaw] of S.pointsByUser.entries()) {
+        const pts = ptsRaw.filter(p => p.ts >= minX && p.ts <= maxX).sort((a, b) => a.ts - b.ts);
+        if (!pts.length) continue;
+        const color = colorForAddress(addr);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = xOf(p.ts), y = yOf(p.price);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        const last = pts[pts.length - 1];
+        const lx = xOf(last.ts), ly = yOf(last.price);
+        ctx.fillStyle = last.pending ? '#ffcb68' : color;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 2.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = '#365074';
+      ctx.strokeRect(pad.l, pad.t, plotW, plotH);
+    }
+
+    async function postCurrentPrice() {
+      if (!S.priv || !S.addr) throw new Error('Unlock wallet first.');
+      const keyword = norm($('keywordInput').value) || '#BTC-USD';
+      const sym = keyword.replace(/^#/, '').toUpperCase();
+      const { price, decimals } = await fetchCoinPrice(sym);
+      const text = `${keyword.toUpperCase()} ${price.toFixed(decimals)}`;
+      const outputs = await buildMsgOutputs({ text, fromAddr: S.addr });
+      const txid = await broadcastTx(outputs);
+      appendLog(`Posted ${text} in tx ${txid}`, 'good');
+      return txid;
+    }
+
+    async function postingLoop() {
+      if (S.posting) return;
+      S.posting = true;
+      appendLog('Auto posting started.', 'good');
+
+      while (S.posting) {
+        try {
+          const { confirmed } = await refreshWalletInfo();
+          if (confirmed < DUST * 3) {
+            setStatus('walletStatus', 'Waiting for confirmed funds across main/change addresses…', 'warn');
+            await sleep(15000);
+            continue;
+          }
+
+          const intervalMinutes = Math.max(0, Number($('postRateInput').value || 60) || 60);
+          const minGapMs = intervalMinutes === 0 ? 15000 : intervalMinutes * 60 * 1000;
+          const since = Date.now() - (S.lastPostAt || 0);
+          if (since < minGapMs) {
+            await sleep(Math.min(15000, minGapMs - since));
+            continue;
+          }
+
+          await postCurrentPrice();
+          S.lastPostAt = Date.now();
+          await loadAndRender();
+
+          if (intervalMinutes > 0) {
+            const next = new Date(S.lastPostAt + intervalMinutes * 60 * 1000).toLocaleTimeString();
+            setStatus('walletStatus', `Posted successfully. Next post after ${next} unless stopped.`, 'good');
+          } else {
+            setStatus('walletStatus', 'Posted successfully. Interval is 0, waiting for immediate next cycle.', 'good');
+          }
+        } catch (error) {
+          appendLog(`Posting loop warning: ${error.message || error}`, 'warn');
+          setStatus('walletStatus', `Auto posting paused by error: ${error.message || error}`, 'warn');
+          await sleep(20000);
+        }
+      }
+
+      appendLog('Auto posting stopped.', 'warn');
+    }
+
+    function stopPosting() {
+      S.posting = false;
+      if (S.posterTimer) {
+        clearTimeout(S.posterTimer);
+        S.posterTimer = null;
+      }
+    }
+
+    function applyCoinPreset() {
+      const symbol = getSelectedSymbol();
+      const quote = getSelectedQuote();
+      const preset = COIN_PRESETS[symbol];
+      if (!preset) return;
+      $('keywordInput').value = `#${symbol}-${quote}`;
+    }
+
+    function startLive() {
+      if (S.liveTimer) return;
+      const tick = async () => {
+        await loadAndRender();
+        if (!S.liveTimer) return;
+        S.liveTimer = setTimeout(tick, getRefreshSeconds() * 1000);
+      };
+      S.liveTimer = setTimeout(tick, 50);
+      appendLog('Live updates started.', 'good');
+    }
+
+    function stopLive() {
+      if (S.liveTimer) clearTimeout(S.liveTimer);
+      S.liveTimer = null;
+      appendLog('Live updates stopped.', 'warn');
+    }
+
+    $('coinSelect').addEventListener('change', () => {
+      applyCoinPreset();
+      loadAndRender().catch(() => {});
+    });
+    $('quoteCurrencySelect').addEventListener('change', () => {
+      applyCoinPreset();
+      loadAndRender().catch(() => {});
+    });
+    $('searchBtn').addEventListener('click', () => loadAndRender().catch(() => {}));
+    $('liveBtn').addEventListener('click', startLive);
+    $('stopLiveBtn').addEventListener('click', stopLive);
+
+    $('unlockBtn').addEventListener('click', async () => {
+      try { await unlockWallet(); }
+      catch (error) { setStatus('walletStatus', error.message || 'Unlock failed.', 'bad'); }
+    });
+    $('refreshWalletBtn').addEventListener('click', () => refreshWalletInfo().catch(err => setStatus('walletStatus', err.message, 'bad')));
+    $('clearWalletBtn').addEventListener('click', clearWallet);
+
+    $('startPosterBtn').addEventListener('click', () => postingLoop().catch(() => {}));
+    $('stopPosterBtn').addEventListener('click', stopPosting);
+
+    window.addEventListener('resize', () => drawChart());
+
+    applyCoinPreset();
+    loadAndRender().catch(() => {});
+  })();
+  </script>
+</body>
+</html>
