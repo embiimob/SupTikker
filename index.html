@@ -76,8 +76,54 @@
     .status.good { border-color: color-mix(in srgb, var(--good), white 20%); color: #b7f5dd; }
     .status.warn { border-color: color-mix(in srgb, var(--warn), white 15%); color: #ffe6b8; }
     .status.bad { border-color: color-mix(in srgb, var(--bad), white 10%); color: #ffc6c6; }
-    .chart-wrap { height: 420px; position: relative; }
-    #chart { width: 100%; height: 100%; display: block; background: #091224; border-radius: 12px; }
+    /* Chart layout */
+    .chart-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .chart-stats { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+    .chart-stat-latest {
+      font-size: 1.45rem; font-weight: 700; color: var(--text);
+      letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+    }
+    .chart-stat-mean { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .range-btns { display: flex; gap: 4px; flex-shrink: 0; }
+    .range-btn {
+      padding: 4px 10px; font-size: .76rem; border-radius: 6px;
+      border: 1px solid var(--border); background: transparent; color: var(--muted);
+      cursor: pointer; font-weight: 700; letter-spacing: .06em;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .range-btn:hover { background: #172742; color: var(--text); border-color: #3a537a; }
+    .range-btn.active { background: var(--accent); color: #08101f; border-color: var(--accent); }
+    .chart-wrap { height: 380px; position: relative; }
+    #chart { width: 100%; height: 100%; display: block; border-radius: 12px; cursor: crosshair; }
+    /* Tooltip */
+    .chart-tooltip {
+      position: absolute; pointer-events: none;
+      background: rgba(7,13,24,.93); border: 1px solid #2e4266;
+      border-radius: 10px; padding: 9px 13px; font-size: .81rem; line-height: 1.65;
+      min-width: 150px; max-width: 220px; z-index: 20; display: none;
+      box-shadow: 0 4px 24px rgba(0,0,0,.5);
+    }
+    .chart-tooltip.visible { display: block; }
+    .ct-time { color: var(--muted); font-size: .74rem; margin-bottom: 5px; border-bottom: 1px solid #1e3050; padding-bottom: 4px; }
+    .ct-row { display: flex; align-items: center; gap: 7px; }
+    .ct-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .ct-name { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ct-price { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* Legend */
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 9px; padding: 0 2px; }
+    .legend-item {
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      padding: 3px 9px; border-radius: 6px; border: 1px solid transparent;
+      font-size: .79rem; transition: opacity .15s, background .12s;
+      user-select: none; color: var(--muted);
+    }
+    .legend-item:hover { background: rgba(255,255,255,.05); border-color: #26344f; }
+    .legend-item.hidden { opacity: .32; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .legend-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .meta { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
     @media (max-width: 780px) { .meta { grid-template-columns: repeat(2,minmax(0,1fr)); } }
     .meta > div { background: #0a1324; border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
@@ -165,8 +211,22 @@
 
         <div style="margin-top:12px" class="meta" id="summaryMeta"></div>
 
-        <div style="margin-top:12px" class="chart-wrap">
-          <canvas id="chart" aria-label="24 hour price chart"></canvas>
+        <div style="margin-top:12px">
+          <div class="chart-header">
+            <div id="chartStats" class="chart-stats"><span class="small">Loading…</span></div>
+            <div class="range-btns" id="rangeButtons">
+              <button class="range-btn active" data-range="24h">24H</button>
+              <button class="range-btn" data-range="7d">7D</button>
+              <button class="range-btn" data-range="1m">1M</button>
+              <button class="range-btn" data-range="1y">1Y</button>
+              <button class="range-btn" data-range="all">ALL</button>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart" aria-label="Price chart"></canvas>
+            <div id="chartTooltip" class="chart-tooltip"></div>
+          </div>
+          <div id="chartLegend" class="chart-legend"></div>
         </div>
       </section>
 
@@ -244,6 +304,9 @@
     const IPFS_PATH_RE = /^\/?ipfs\/([a-zA-Z0-9]+)(?:\/(.*))?$/i;
     const FALLBACK_AVI = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" fill="%23182a45"/%3E%3Ctext x="50%25" y="56%25" dominant-baseline="middle" text-anchor="middle" font-family="system-ui" font-size="52" fill="%23a9bee6"%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E';
 
+    const RANGE_MS = { '24h': 24*60*60*1000, '7d': 7*24*60*60*1000, '1m': 30*24*60*60*1000, '1y': 365*24*60*60*1000, 'all': null };
+    const RANGE_MAX_PAGES = { '24h': 3, '7d': 14, '1m': 40, '1y': 130, 'all': 300 };
+
     const COIN_PRESETS = {
       BTC: { keyword: '#BTC', cgId: 'bitcoin' },
       LTC: { keyword: '#LTC', cgId: 'litecoin' },
@@ -279,7 +342,10 @@
       lastPostAt: 0,
       pointsByUser: new Map(),
       currentRows: [],
-      chartMeta: { minY: 0, maxY: 1, minX: 0, maxX: 1 },
+      chartMeta: { minY: 0, maxY: 1, minX: 0, maxX: 1, pad: {l:72,r:18,t:20,b:38}, plotW: 0, plotH: 0 },
+      hiddenAddrs: new Set(),
+      chartRange: '24h',
+      chartHoverTs: null,
       loading: false,
     };
 
@@ -390,6 +456,35 @@
       let h = 0;
       for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
       return `hsl(${h % 360} 72% 60%)`;
+    }
+    function colorForAddressRgba(addr, alpha) {
+      let h = 0;
+      for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
+      const hue = h % 360, s = 0.72, l = 0.60;
+      const c = (1 - Math.abs(2*l-1)) * s;
+      const x = c * (1 - Math.abs(((hue/60) % 2) - 1));
+      const m = l - c/2;
+      const seg = Math.floor(hue/60) % 6;
+      const [r,g,b] = [[c,x,0],[x,c,0],[0,c,x],[0,x,c],[x,0,c],[c,0,x]][seg];
+      return `rgba(${Math.round((r+m)*255)},${Math.round((g+m)*255)},${Math.round((b+m)*255)},${alpha})`;
+    }
+    function fmtPrice(v) {
+      if (!Number.isFinite(v)) return '—';
+      if (v >= 10000) return v.toLocaleString(undefined,{maximumFractionDigits:0});
+      if (v >= 1000) return v.toFixed(1);
+      if (v >= 10) return v.toFixed(2);
+      if (v >= 1) return v.toFixed(4);
+      return v.toFixed(6);
+    }
+    function fmtAxisTime(ts, range, full = false) {
+      const d = new Date(ts);
+      const HH = String(d.getHours()).padStart(2,'0'), MM = String(d.getMinutes()).padStart(2,'0');
+      if (full) return `${d.toLocaleDateString([],{month:'short',day:'numeric'})} ${HH}:${MM}`;
+      if (range === '24h') return `${HH}:${MM}`;
+      if (range === '7d') return `${d.toLocaleDateString([],{weekday:'short'})} ${HH}h`;
+      if (range === '1m') return d.toLocaleDateString([],{month:'short',day:'numeric'});
+      if (range === '1y') return d.toLocaleDateString([],{month:'short',year:'2-digit'});
+      return d.toLocaleDateString([],{month:'short',year:'numeric'});
     }
 
     function buildIpfsUrl(cid, path = '', gi = 0) {
@@ -941,13 +1036,13 @@
       return { price: value, decimals: quotePreset.decimals };
     }
 
-    async function fetchRecentKeywordRows(keyword) {
+    async function fetchRecentKeywordRows(keyword, windowMs = 24 * 60 * 60 * 1000, maxPages = 3) {
       const cleanKeyword = norm(keyword).replace(/^#/, '').toUpperCase();
       if (!cleanKeyword) throw new Error('Keyword is required.');
       const addr = await kwAddr(cleanKeyword);
-      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      const cutoff = windowMs != null ? Date.now() - windowMs : 0;
       const rows = [];
-      for (let page = 0; page < 3; page++) {
+      for (let page = 0; page < maxPages; page++) {
         const qty = 120;
         const skip = page * qty;
         const data = await fetchJson(`${getApiBase()}/GetPublicMessagesByAddress/${encodeURIComponent(addr)}?mainnet=false&skip=${skip}&qty=${qty}`, 30000);
@@ -958,7 +1053,7 @@
           const ts = parseTimestamp(row.blockDate);
           return ts ? Math.min(min, ts) : min;
         }, Date.now());
-        if (oldest < cutoff) break;
+        if (cutoff > 0 && oldest < cutoff) break;
         if (normalized.length < qty) break;
       }
       const seen = new Set();
@@ -980,14 +1075,16 @@
         const symbol = norm(keyword).replace(/^#/, '').toUpperCase();
         setStatus('searchStatus', `Loading recent ${keyword} messages…`);
 
-        const { rows, keywordAddress } = await fetchRecentKeywordRows(keyword);
-        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const windowMs = RANGE_MS[S.chartRange];
+        const maxPages = RANGE_MAX_PAGES[S.chartRange];
+        const { rows, keywordAddress } = await fetchRecentKeywordRows(keyword, windowMs, maxPages);
+        const cutoff = windowMs != null ? Date.now() - windowMs : 0;
         const grouped = new Map();
 
         for (const row of rows) {
           const point = parsePricePoint(row, symbol);
           if (!point) continue;
-          if (point.ts < cutoff) continue;
+          if (cutoff > 0 && point.ts < cutoff) continue;
           const addr = norm(row.fromAddr);
           if (!isAddr(addr)) continue;
           if (!grouped.has(addr)) grouped.set(addr, []);
@@ -1030,6 +1127,8 @@
           confirmed,
           pending,
         });
+        renderLegend();
+        renderChartStats();
         drawChart();
 
         setStatus('searchStatus', `Loaded ${allPoints.length} points from ${grouped.size} reporters for ${keyword}.`, 'good');
@@ -1042,11 +1141,12 @@
     }
 
     function renderSummary(meta) {
+      const rangeLabel = { '24h':'24h', '7d':'7d', '1m':'30d', '1y':'1y', 'all':'all time' }[S.chartRange] || S.chartRange;
       $('summaryMeta').innerHTML = [
         ['Keyword', meta.keyword],
         ['Keyword address', shortAddr(meta.keywordAddress)],
         ['Reporters', meta.reporters],
-        ['Points (24h)', meta.points],
+        [`Points (${rangeLabel})`, meta.points],
         ['Confirmed', meta.confirmed],
         ['Pending', meta.pending],
       ].map(([k, v]) => `<div><span class="small">${esc(k)}</span><b>${esc(String(v))}</b></div>`).join('');
@@ -1062,7 +1162,7 @@
     function renderReporterTable() {
       const body = $('reporterBody');
       if (!S.currentRows.length) {
-        body.innerHTML = '<tr><td colspan="5" class="small">No matching price messages in the last 24 hours.</td></tr>';
+        body.innerHTML = '<tr><td colspan="5" class="small">No matching price messages in this time range.</td></tr>';
         return;
       }
 
@@ -1101,85 +1201,252 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
-      const pad = { l: 62, r: 16, t: 16, b: 30 };
+      const pad = { l: 72, r: 18, t: 22, b: 38 };
       const plotW = width - pad.l - pad.r;
       const plotH = height - pad.t - pad.b;
       if (plotW <= 10 || plotH <= 10) return;
 
-      const points = [...S.pointsByUser.values()].flat();
+      const visibleEntries = [...S.pointsByUser.entries()].filter(([addr]) => !S.hiddenAddrs.has(addr));
+      const points = visibleEntries.flatMap(([, pts]) => pts);
       const now = Date.now();
+      const windowMs = RANGE_MS[S.chartRange];
       const latestPointTs = points.length ? Math.max(...points.map(p => Number(p.ts) || 0)) : now;
       const maxX = Math.max(now, latestPointTs);
-      const minX = maxX - 24 * 60 * 60 * 1000;
-      let minY = Math.min(...points.map(p => p.price));
-      let maxY = Math.max(...points.map(p => p.price));
-      if (!Number.isFinite(minY) || !Number.isFinite(maxY)) {
-        minY = 0; maxY = 1;
-      }
+      const minX = windowMs != null
+        ? maxX - windowMs
+        : (points.length ? Math.min(...points.map(p => p.ts)) : maxX - 24 * 60 * 60 * 1000);
+
+      let minY = points.length ? Math.min(...points.map(p => p.price)) : 0;
+      let maxY = points.length ? Math.max(...points.map(p => p.price)) : 1;
+      if (!Number.isFinite(minY) || !Number.isFinite(maxY)) { minY = 0; maxY = 1; }
       if (minY === maxY) { minY *= 0.995; maxY *= 1.005; if (minY === maxY) maxY = minY + 1; }
-      const padY = (maxY - minY) * 0.08;
-      minY -= padY;
-      maxY += padY;
-      S.chartMeta = { minY, maxY, minX, maxX };
+      const padY = (maxY - minY) * 0.1;
+      minY -= padY; maxY += padY;
+      S.chartMeta = { minY, maxY, minX, maxX, pad, plotW, plotH, width, height };
 
       const xOf = t => pad.l + ((t - minX) / (maxX - minX)) * plotW;
       const yOf = v => pad.t + (1 - (v - minY) / (maxY - minY)) * plotH;
 
-      ctx.fillStyle = '#091224';
-      ctx.fillRect(0, 0, width, height);
+      // Background gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+      bgGrad.addColorStop(0, '#0b1629');
+      bgGrad.addColorStop(1, '#070d1c');
+      ctx.fillStyle = bgGrad;
+      if (ctx.roundRect) {
+        ctx.beginPath(); ctx.roundRect(0, 0, width, height, 12); ctx.fill();
+      } else { ctx.fillRect(0, 0, width, height); }
 
-      ctx.strokeStyle = 'rgba(107,140,194,.2)';
+      // Grid lines
+      const gridR = 5, gridC = 6;
+      ctx.strokeStyle = 'rgba(107,140,194,.11)';
       ctx.lineWidth = 1;
-      for (let i = 0; i <= 6; i++) {
-        const y = pad.t + (plotH * i / 6);
+      for (let i = 0; i <= gridR; i++) {
+        const y = pad.t + (plotH * i / gridR);
         ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(width - pad.r, y); ctx.stroke();
       }
-      for (let i = 0; i <= 6; i++) {
-        const x = pad.l + (plotW * i / 6);
+      for (let i = 0; i <= gridC; i++) {
+        const x = pad.l + (plotW * i / gridC);
         ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, height - pad.b); ctx.stroke();
       }
 
-      ctx.fillStyle = '#9fb1d4';
-      ctx.font = '11px system-ui';
+      // Y-axis labels
+      ctx.font = '10.5px system-ui';
       ctx.textAlign = 'right';
-      for (let i = 0; i <= 6; i++) {
-        const value = maxY - ((maxY - minY) * i / 6);
-        const y = pad.t + (plotH * i / 6);
-        ctx.fillText(value.toFixed(value >= 1000 ? 0 : value >= 10 ? 2 : 5), pad.l - 7, y + 4);
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#5a7aaa';
+      for (let i = 0; i <= gridR; i++) {
+        const value = maxY - ((maxY - minY) * i / gridR);
+        const y = pad.t + (plotH * i / gridR);
+        ctx.fillText(fmtPrice(value), pad.l - 6, y);
       }
 
+      // X-axis labels
       ctx.textAlign = 'center';
-      for (let i = 0; i <= 6; i++) {
-        const ts = minX + ((maxX - minX) * i / 6);
-        const x = pad.l + (plotW * i / 6);
-        const d = new Date(ts);
-        ctx.fillText(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`, x, height - 8);
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#5a7aaa';
+      for (let i = 0; i <= gridC; i++) {
+        const ts = minX + ((maxX - minX) * i / gridC);
+        const x = pad.l + (plotW * i / gridC);
+        ctx.fillText(fmtAxisTime(ts, S.chartRange), x, height - pad.b + 6);
       }
 
-      for (const [addr, ptsRaw] of S.pointsByUser.entries()) {
+      // Series
+      for (const [addr, ptsRaw] of visibleEntries) {
         const pts = ptsRaw.filter(p => p.ts >= minX && p.ts <= maxX).sort((a, b) => a.ts - b.ts);
         if (!pts.length) continue;
         const color = colorForAddress(addr);
+        const colorFill = colorForAddressRgba(addr, 0.14);
+        const colorFill0 = colorForAddressRgba(addr, 0);
+
+        // Gradient fill under line
+        const areaGrad = ctx.createLinearGradient(0, pad.t, 0, height - pad.b);
+        areaGrad.addColorStop(0, colorFill);
+        areaGrad.addColorStop(1, colorFill0);
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(xOf(pts[0].ts), height - pad.b);
+        ctx.lineTo(xOf(pts[0].ts), yOf(pts[0].price));
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(xOf(pts[i].ts), yOf(pts[i].price));
+        ctx.lineTo(xOf(pts[pts.length - 1].ts), height - pad.b);
+        ctx.closePath();
+        ctx.fill();
+
+        // Line
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.8;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.beginPath();
         pts.forEach((p, i) => {
           const x = xOf(p.ts), y = yOf(p.price);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         });
         ctx.stroke();
 
+        // Latest point dot
         const last = pts[pts.length - 1];
         const lx = xOf(last.ts), ly = yOf(last.price);
+        ctx.fillStyle = '#0b1629';
+        ctx.beginPath(); ctx.arc(lx, ly, 4.8, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = last.pending ? '#ffcb68' : color;
-        ctx.beginPath();
-        ctx.arc(lx, ly, 2.7, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(lx, ly, 3.1, 0, Math.PI * 2); ctx.fill();
       }
 
-      ctx.strokeStyle = '#365074';
-      ctx.strokeRect(pad.l, pad.t, plotW, plotH);
+      // Hover crosshair
+      if (S.chartHoverTs != null) {
+        const hx = Math.round(xOf(S.chartHoverTs)) + 0.5;
+        if (hx >= pad.l && hx <= pad.l + plotW) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(105,176,255,.4)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath(); ctx.moveTo(hx, pad.t); ctx.lineTo(hx, height - pad.b); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+
+          for (const [addr, ptsRaw] of visibleEntries) {
+            const pts = ptsRaw.filter(p => p.ts >= minX && p.ts <= maxX);
+            if (!pts.length) continue;
+            const nearest = pts.reduce((a, b) =>
+              Math.abs(b.ts - S.chartHoverTs) < Math.abs(a.ts - S.chartHoverTs) ? b : a);
+            const color = colorForAddress(addr);
+            const nx = xOf(nearest.ts), ny = yOf(nearest.price);
+            ctx.fillStyle = '#0b1629';
+            ctx.beginPath(); ctx.arc(nx, ny, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(nx, ny, 3.8, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }
+
+      // Plot border
+      ctx.strokeStyle = 'rgba(54,80,116,.38)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad.l + 0.5, pad.t + 0.5, plotW - 1, plotH - 1);
+    }
+
+    function renderLegend() {
+      const legend = $('chartLegend');
+      if (!S.currentRows.length) { legend.innerHTML = ''; return; }
+      legend.innerHTML = S.currentRows.map(row => {
+        const profile = row.profile || S.profileCache.get(`a:${row.addr}`);
+        const name = buildDisplayName(profile, row.addr);
+        const color = colorForAddress(row.addr);
+        const hidden = S.hiddenAddrs.has(row.addr);
+        return `<div class="legend-item${hidden ? ' hidden' : ''}" data-addr="${esc(row.addr)}" title="${esc(row.addr)}">
+          <div class="legend-dot" style="background:${esc(color)}"></div>
+          <span class="legend-name">${esc(name)}</span>
+        </div>`;
+      }).join('');
+      legend.querySelectorAll('.legend-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const addr = item.dataset.addr;
+          if (S.hiddenAddrs.has(addr)) S.hiddenAddrs.delete(addr);
+          else S.hiddenAddrs.add(addr);
+          item.classList.toggle('hidden');
+          renderChartStats();
+          drawChart();
+        });
+      });
+    }
+
+    function renderChartStats() {
+      const el = $('chartStats');
+      const visibleEntries = [...S.pointsByUser.entries()].filter(([addr]) => !S.hiddenAddrs.has(addr));
+      if (!visibleEntries.length) {
+        el.innerHTML = '<span class="small">No visible data</span>';
+        return;
+      }
+      let latestPrice = null, latestTs = 0;
+      const lastPrices = [];
+      for (const [, pts] of visibleEntries) {
+        if (!pts.length) continue;
+        const sorted = [...pts].sort((a, b) => b.ts - a.ts);
+        lastPrices.push(sorted[0].price);
+        if (sorted[0].ts > latestTs) { latestTs = sorted[0].ts; latestPrice = sorted[0].price; }
+      }
+      const mean = lastPrices.length ? lastPrices.reduce((s, v) => s + v, 0) / lastPrices.length : null;
+      const keyword = norm($('keywordInput').value) || '';
+      const dashIdx = keyword.lastIndexOf('-');
+      const quote = dashIdx >= 0 ? keyword.slice(dashIdx + 1).replace(/^#/, '').toUpperCase() : '';
+      const quoteStr = quote ? ` <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${esc(quote)}</span>` : '';
+      el.innerHTML =
+        `<span class="chart-stat-latest">${esc(latestPrice != null ? fmtPrice(latestPrice) : '—')}${quoteStr}</span>` +
+        (mean != null && lastPrices.length > 1
+          ? `<span class="chart-stat-mean">avg ${esc(fmtPrice(mean))}${quote ? ` ${esc(quote)}` : ''} <span style="font-size:.72rem">(${lastPrices.length} sources)</span></span>`
+          : '');
+    }
+
+    function updateChartTooltip(offsetX, offsetY) {
+      const { minX, maxX, pad, plotW, plotH } = S.chartMeta;
+      if (!plotW) return;
+      if (offsetX < pad.l || offsetX > pad.l + plotW || offsetY < pad.t || offsetY > pad.t + plotH) {
+        hideChartTooltip(); return;
+      }
+      const hoverTs = minX + ((offsetX - pad.l) / plotW) * (maxX - minX);
+      S.chartHoverTs = hoverTs;
+      drawChart();
+
+      const visibleEntries = [...S.pointsByUser.entries()].filter(([addr]) => !S.hiddenAddrs.has(addr));
+      const rows = [];
+      for (const [addr, pts] of visibleEntries) {
+        const filtered = pts.filter(p => p.ts >= minX && p.ts <= maxX);
+        if (!filtered.length) continue;
+        const nearest = filtered.reduce((a, b) =>
+          Math.abs(b.ts - hoverTs) < Math.abs(a.ts - hoverTs) ? b : a);
+        const profile = S.profileCache.get(`a:${addr}`);
+        rows.push({ addr, name: buildDisplayName(profile, addr), price: nearest.price, color: colorForAddress(addr) });
+      }
+      if (!rows.length) { hideChartTooltip(); return; }
+      rows.sort((a, b) => b.price - a.price);
+
+      const tooltip = $('chartTooltip');
+      tooltip.innerHTML =
+        `<div class="ct-time">${esc(fmtAxisTime(hoverTs, S.chartRange, true))}</div>` +
+        rows.map(r =>
+          `<div class="ct-row">
+            <div class="ct-dot" style="background:${esc(r.color)}"></div>
+            <div class="ct-name">${esc(r.name)}</div>
+            <div class="ct-price">${esc(fmtPrice(r.price))}</div>
+          </div>`).join('');
+
+      const wrap = $('chart').parentElement;
+      const wrapW = wrap.clientWidth, wrapH = wrap.clientHeight;
+      const tipW = 190, tipH = 30 + rows.length * 22;
+      let tx = offsetX + 16, ty = offsetY - 16;
+      if (tx + tipW > wrapW - 6) tx = offsetX - tipW - 16;
+      if (tx < 4) tx = 4;
+      if (ty + tipH > wrapH - 4) ty = wrapH - tipH - 4;
+      if (ty < 4) ty = 4;
+      tooltip.style.left = tx + 'px';
+      tooltip.style.top = ty + 'px';
+      tooltip.classList.add('visible');
+    }
+
+    function hideChartTooltip() {
+      S.chartHoverTs = null;
+      drawChart();
+      $('chartTooltip').classList.remove('visible');
     }
 
     async function postCurrentPrice() {
@@ -1302,6 +1569,29 @@
     $('stopPosterBtn').addEventListener('click', stopPosting);
 
     window.addEventListener('resize', () => drawChart());
+
+    // Range buttons
+    $('rangeButtons').addEventListener('click', e => {
+      const btn = e.target.closest('.range-btn');
+      if (!btn) return;
+      const range = btn.dataset.range;
+      if (range === S.chartRange) return;
+      S.chartRange = range;
+      document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+      loadAndRender().catch(() => {});
+    });
+
+    // Chart hover / drag tooltip
+    const _chartEl = $('chart');
+    _chartEl.addEventListener('mousemove', e => { updateChartTooltip(e.offsetX, e.offsetY); });
+    _chartEl.addEventListener('mouseleave', () => { hideChartTooltip(); });
+    _chartEl.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const rect = _chartEl.getBoundingClientRect();
+      const t = e.touches[0];
+      updateChartTooltip(t.clientX - rect.left, t.clientY - rect.top);
+    }, { passive: false });
+    _chartEl.addEventListener('touchend', () => { hideChartTooltip(); });
 
     applyCoinPreset();
     loadAndRender().catch(() => {});
