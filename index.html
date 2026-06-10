@@ -499,13 +499,17 @@
     }
     function parseTimestamp(v) { const t = parseUtcMs(v); return Number.isFinite(t) ? t : 0; }
     function colorForAddress(addr) {
-      if (addr === '@bitcoin') return '#f7931a';
+      const profile = S.profileCache.get(`a:${addr}`);
+      const name = buildDisplayName(profile, addr);
+      if (name === '@bitcoin') return '#f7931a';
       let h = 0;
       for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
       return `hsl(${h % 360} 72% 60%)`;
     }
     function colorForAddressRgba(addr, alpha) {
-      if (addr === '@bitcoin') return `rgba(247, 147, 26, ${alpha})`;
+      const profile = S.profileCache.get(`a:${addr}`);
+      const name = buildDisplayName(profile, addr);
+      if (name === '@bitcoin') return `rgba(247, 147, 26, ${alpha})`;
       let h = 0;
       for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) >>> 0;
       const hue = h % 360, s = 0.72, l = 0.60;
