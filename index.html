@@ -173,9 +173,9 @@
     <div class="grid" style="margin-top:14px">
       <section id="tickerCard" class="card span-12">
         <h2>Ticker search</h2>
-        <div class="row" style="grid-template-columns: repeat(4,minmax(0,1fr));">
+        <div class="row" style="grid-template-columns: repeat(3,minmax(0,1fr));">
           <div class="field">
-            <label for="coinSelect">Base coin</label>
+            <label for="coinSelect">Coin</label>
             <select id="coinSelect">
               <option value="BTC" selected>BTC</option>
               <option value="LTC">LTC</option>
@@ -185,7 +185,7 @@
             </select>
           </div>
           <div class="field">
-            <label for="quoteCurrencySelect">Quote currency</label>
+            <label for="quoteCurrencySelect">Currency</label>
             <select id="quoteCurrencySelect">
               <option value="USD" selected>USD</option>
               <option value="EUR">EUR</option>
@@ -201,10 +201,6 @@
           <div class="field">
             <label for="keywordInput">Keyword</label>
             <input id="keywordInput" value="#BTC-USD" autocomplete="off" spellcheck="false">
-          </div>
-          <div class="field">
-            <label for="apiBaseInput">p2fk API</label>
-            <input id="apiBaseInput" value="https://p2fk.io" autocomplete="off" spellcheck="false">
           </div>
         </div>
 
@@ -238,15 +234,14 @@
 
           <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
             <div class="btns" style="margin-top:0;">
-              <button id="searchBtn" class="primary btn-sm">Refresh chart</button>
-              <button id="liveBtn" class="good btn-sm">Start live updates</button>
-              <button id="stopLiveBtn" class="warn btn-sm">Stop live updates</button>
+              <button id="searchBtn" class="btn-sm" style="font-size: 1.2rem; padding: 4px 8px; background: transparent; border: 1px solid var(--border); color: var(--text);" title="Refresh chart">🔄</button>
+              <button id="liveBtn" class="btn-sm" style="font-size: 1.2rem; padding: 4px 8px; background: transparent; border: 1px solid var(--border); color: var(--text);" title="Start live updates">▶️</button>
+              <button id="stopLiveBtn" class="btn-sm" style="font-size: 1.2rem; padding: 4px 8px; background: transparent; border: 1px solid var(--border); color: var(--text);" title="Stop live updates">⏹️</button>
             </div>
             <div class="field" style="width:120px;">
               <input id="refreshInput" type="number" min="10" max="300" step="5" value="20" placeholder="Seconds" style="padding: 6px 12px;">
             </div>
           </div>
-          <div id="searchStatus" class="status">Ready. Default keyword is <code>#BTC-USD</code>.</div>
 
         </div>
       </section>
@@ -263,7 +258,7 @@
           <button id="clearWalletBtn" class="warn">Clear wallet</button>
         </div>
 
-        <div class="row" style="grid-template-columns: repeat(2,minmax(0,1fr)); margin-top:10px;">
+        <div class="row" style="grid-template-columns: repeat(3,minmax(0,1fr)); margin-top:10px;">
           <div class="field">
             <label for="postRateInput">Posting interval (minutes)</label>
             <input id="postRateInput" type="number" min="0" step="1" value="60">
@@ -272,11 +267,15 @@
             <label for="priceApiInput">Price API endpoint</label>
             <input id="priceApiInput" value="https://api.coingecko.com/api/v3/simple/price" autocomplete="off" spellcheck="false">
           </div>
+          <div class="field">
+            <label for="apiBaseInput">p2fk API</label>
+            <input id="apiBaseInput" value="https://p2fk.io" autocomplete="off" spellcheck="false">
+          </div>
         </div>
 
         <div class="btns">
-          <button id="startPosterBtn" class="good btn-sm">Start posting</button>
-          <button id="stopPosterBtn" class="warn btn-sm">Stop posting</button>
+          <button id="startPosterBtn" class="btn-sm" style="font-size: 1.2rem; padding: 4px 8px; background: transparent; border: 1px solid var(--border); color: var(--text);" title="Start posting">▶️</button>
+          <button id="stopPosterBtn" class="btn-sm" style="font-size: 1.2rem; padding: 4px 8px; background: transparent; border: 1px solid var(--border); color: var(--text);" title="Stop posting">⏹️</button>
         </div>
 
         <div id="walletStatus" class="status">Wallet locked.</div>
@@ -294,6 +293,7 @@
           </table>
         </div>
         <div style="margin-top:12px" class="meta" id="summaryMeta"></div>
+        <div id="searchStatus" class="status" style="margin-top: 12px;">Ready. Default keyword is <code>#BTC-USD</code>.</div>
       </section>
 
       <section class="card span-12">
