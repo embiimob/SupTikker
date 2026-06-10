@@ -62,6 +62,7 @@
     button.good { background: var(--good); color: #032015; border: 0; font-weight: 700; }
     button.warn { background: var(--warn); color: #261500; border: 0; font-weight: 700; }
     button:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-sm { padding: 6px 12px; font-size: .85rem; border-radius: 8px; }
     .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .status {
       margin-top: 10px;
@@ -172,29 +173,29 @@
     <div class="grid" style="margin-top:14px">
       <section id="tickerCard" class="card span-12">
         <h2>Ticker search</h2>
-        <div class="row" style="grid-template-columns: repeat(5,minmax(0,1fr));">
+        <div class="row" style="grid-template-columns: repeat(4,minmax(0,1fr));">
           <div class="field">
             <label for="coinSelect">Base coin</label>
             <select id="coinSelect">
-              <option value="BTC" selected>Bitcoin (BTC)</option>
-              <option value="LTC">Litecoin (LTC)</option>
-              <option value="DOG">Dogecoin (DOGE)</option>
-              <option value="XTZ">Tezos (XTZ)</option>
-              <option value="ETH">Ethereum (ETH)</option>
+              <option value="BTC" selected>BTC</option>
+              <option value="LTC">LTC</option>
+              <option value="DOG">DOGE</option>
+              <option value="XTZ">XTZ</option>
+              <option value="ETH">ETH</option>
             </select>
           </div>
           <div class="field">
             <label for="quoteCurrencySelect">Quote currency</label>
             <select id="quoteCurrencySelect">
-              <option value="USD" selected>USD – US Dollar</option>
-              <option value="EUR">EUR – Euro</option>
-              <option value="GBP">GBP – British Pound</option>
-              <option value="JPY">JPY – Japanese Yen</option>
-              <option value="CAD">CAD – Canadian Dollar</option>
-              <option value="AUD">AUD – Australian Dollar</option>
-              <option value="BTC">BTC – Bitcoin</option>
-              <option value="ETH">ETH – Ethereum</option>
-              <option value="LTC">LTC – Litecoin</option>
+              <option value="USD" selected>USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="JPY">JPY</option>
+              <option value="CAD">CAD</option>
+              <option value="AUD">AUD</option>
+              <option value="BTC">BTC</option>
+              <option value="ETH">ETH</option>
+              <option value="LTC">LTC</option>
             </select>
           </div>
           <div class="field">
@@ -205,17 +206,7 @@
             <label for="apiBaseInput">p2fk API</label>
             <input id="apiBaseInput" value="https://p2fk.io" autocomplete="off" spellcheck="false">
           </div>
-          <div class="field">
-            <label for="refreshInput">Refresh seconds</label>
-            <input id="refreshInput" type="number" min="10" max="300" step="5" value="20">
-          </div>
         </div>
-        <div class="btns">
-          <button id="searchBtn" class="primary">Refresh chart</button>
-          <button id="liveBtn" class="good">Start live updates</button>
-          <button id="stopLiveBtn" class="warn">Stop live updates</button>
-        </div>
-        <div id="searchStatus" class="status">Ready. Default keyword is <code>#BTC-USD</code>.</div>
 
         <div class="row" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border); grid-template-columns: repeat(2,minmax(0,1fr));">
           <div class="field">
@@ -227,8 +218,6 @@
             <input type="number" id="quoteConvertInput" placeholder="...">
           </div>
         </div>
-
-        <div style="margin-top:12px" class="meta" id="summaryMeta"></div>
 
         <div style="margin-top:12px">
           <div class="chart-header">
@@ -246,6 +235,19 @@
             <div id="chartTooltip" class="chart-tooltip"></div>
           </div>
           <div id="chartLegend" class="chart-legend"></div>
+
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+            <div class="btns" style="margin-top:0;">
+              <button id="searchBtn" class="primary btn-sm">Refresh chart</button>
+              <button id="liveBtn" class="good btn-sm">Start live updates</button>
+              <button id="stopLiveBtn" class="warn btn-sm">Stop live updates</button>
+            </div>
+            <div class="field" style="width:120px;">
+              <input id="refreshInput" type="number" min="10" max="300" step="5" value="20" placeholder="Seconds" style="padding: 6px 12px;">
+            </div>
+          </div>
+          <div id="searchStatus" class="status">Ready. Default keyword is <code>#BTC-USD</code>.</div>
+
         </div>
       </section>
 
@@ -273,8 +275,8 @@
         </div>
 
         <div class="btns">
-          <button id="startPosterBtn" class="good">Start posting</button>
-          <button id="stopPosterBtn" class="warn">Stop posting</button>
+          <button id="startPosterBtn" class="good btn-sm">Start posting</button>
+          <button id="stopPosterBtn" class="warn btn-sm">Stop posting</button>
         </div>
 
         <div id="walletStatus" class="status">Wallet locked.</div>
@@ -291,6 +293,7 @@
             <tbody id="reporterBody"><tr><td colspan="5" class="small">No data loaded yet.</td></tr></tbody>
           </table>
         </div>
+        <div style="margin-top:12px" class="meta" id="summaryMeta"></div>
       </section>
 
       <section class="card span-12">
