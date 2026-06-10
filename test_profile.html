@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+    const S = { profileCache: new Map() };
+    function buildDisplayName(profile, addr) {
+      if (!profile) return addr;
+      const urn = profile.urn ? profile.urn.replace(/^@+/, '') : '';
+      const base = urn ? `@${urn}` : (profile.displayName || addr);
+      return profile.isClaimedProfile ? `⚠ ${base}` : base;
+    }
+    S.profileCache.set('a:mwgn...', { urn: '@bitcoin', isClaimedProfile: false });
+    const name = buildDisplayName(S.profileCache.get('a:mwgn...'), 'mwgn...');
+    console.log(name);
+</script>
+</body>
+</html>
