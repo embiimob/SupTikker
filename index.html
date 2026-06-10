@@ -97,6 +97,10 @@
     .range-btn:hover { background: #172742; color: var(--text); border-color: #3a537a; }
     .range-btn.active { background: var(--accent); color: #08101f; border-color: var(--accent); }
     .chart-wrap { height: 380px; position: relative; }
+    @media (max-width: 600px) {
+      .wrap { padding: 8px; }
+      .chart-wrap { height: 260px; }
+    }
     #chart { width: 100%; height: 100%; display: block; border-radius: 12px; cursor: crosshair; }
     /* Tooltip */
     .chart-tooltip {
@@ -157,12 +161,16 @@
   </style>
 </head>
 <body>
+  <div id="rateLimitIndicator" style="display:none; position:fixed; top:10px; right:10px; z-index:9999;" class="status warn">Rate limited by API. Please wait...</div>
   <div class="wrap">
-    <h1>SupTikker</h1>
+    <h1 style="display:flex; justify-content:space-between; align-items:center; margin:0;">
+      SupTikker
+      <button id="gearBtn" style="background:transparent; border:none; font-size:1.4rem; padding:0; margin:0; cursor:pointer;" title="Settings">⚙️</button>
+    </h1>
     <p class="small">Single-file testnet3 price ticker + publisher for p2fk.io keywords.</p>
 
     <div class="grid" style="margin-top:14px">
-      <section class="card span-8">
+      <section id="tickerCard" class="card span-12">
         <h2>Ticker search</h2>
         <div class="row" style="grid-template-columns: repeat(5,minmax(0,1fr));">
           <div class="field">
@@ -209,6 +217,17 @@
         </div>
         <div id="searchStatus" class="status">Ready. Default keyword is <code>#BTC-USD</code>.</div>
 
+        <div class="row" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border); grid-template-columns: repeat(2,minmax(0,1fr));">
+          <div class="field">
+            <label id="baseConvertLabel">Base amount</label>
+            <input type="number" id="baseConvertInput" placeholder="1.0">
+          </div>
+          <div class="field">
+            <label id="quoteConvertLabel">Quote amount</label>
+            <input type="number" id="quoteConvertInput" placeholder="...">
+          </div>
+        </div>
+
         <div style="margin-top:12px" class="meta" id="summaryMeta"></div>
 
         <div style="margin-top:12px">
@@ -230,7 +249,7 @@
         </div>
       </section>
 
-      <section class="card span-4">
+      <section id="walletCard" class="card span-4" style="display:none;">
         <h2>Wallet + auto etching</h2>
         <div class="field">
           <label for="wifInput">Testnet3 WIF</label>
@@ -347,6 +366,7 @@
       chartRange: '24h',
       chartHoverTs: null,
       loading: false,
+      latestPrice: null,
     };
 
     const $ = id => document.getElementById(id);
@@ -387,7 +407,9 @@
         while (S.rateWindow.length && (now - S.rateWindow[0]) >= windowMs) S.rateWindow.shift();
         if (S.rateWindow.length < maxCalls) break;
         const waitMs = Math.max(20, windowMs - (now - S.rateWindow[0]) + 25);
+        $('rateLimitIndicator').style.display = 'block';
         await sleep(waitMs);
+        $('rateLimitIndicator').style.display = 'none';
       }
       S.rateWindow.push(Date.now());
 
@@ -401,9 +423,18 @@
     }
 
     async function fetchJson(url, timeout = 25000) {
-      const res = await rateLimitedFetch(url, {}, timeout);
-      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-      return res.json();
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const res = await rateLimitedFetch(url, {}, timeout);
+        if (res.status === 429) {
+          $('rateLimitIndicator').style.display = 'block';
+          await sleep(3000);
+          $('rateLimitIndicator').style.display = 'none';
+          continue;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+        return res.json();
+      }
+      throw new Error(`HTTP 429 too many times for ${url}`);
     }
 
     function parseMsg(text) {
@@ -1390,6 +1421,10 @@
       const dashIdx = keyword.lastIndexOf('-');
       const quote = dashIdx >= 0 ? keyword.slice(dashIdx + 1).replace(/^#/, '').toUpperCase() : '';
       const quoteStr = quote ? ` <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${esc(quote)}</span>` : '';
+      S.latestPrice = latestPrice;
+      if (S.latestPrice && $('baseConvertInput').value) {
+        $('quoteConvertInput').value = (parseFloat($('baseConvertInput').value) * S.latestPrice).toFixed(6);
+      }
       el.innerHTML =
         `<span class="chart-stat-latest">${esc(latestPrice != null ? fmtPrice(latestPrice) : '—')}${quoteStr}</span>` +
         (mean != null && lastPrices.length > 1
@@ -1546,12 +1581,37 @@
       appendLog('Live updates stopped.', 'warn');
     }
 
+    function updateConvertLabels() {
+      const base = getSelectedSymbol();
+      const quote = getSelectedQuote();
+      $('baseConvertLabel').textContent = `${base} amount`;
+      $('quoteConvertLabel').textContent = `${quote} amount`;
+    }
+
+    $('baseConvertInput').addEventListener('input', () => {
+      if (S.latestPrice) {
+        const val = parseFloat($('baseConvertInput').value);
+        if (!isNaN(val)) $('quoteConvertInput').value = (val * S.latestPrice).toFixed(6);
+        else $('quoteConvertInput').value = '';
+      }
+    });
+
+    $('quoteConvertInput').addEventListener('input', () => {
+      if (S.latestPrice) {
+        const val = parseFloat($('quoteConvertInput').value);
+        if (!isNaN(val)) $('baseConvertInput').value = (val / S.latestPrice).toFixed(6);
+        else $('baseConvertInput').value = '';
+      }
+    });
+
     $('coinSelect').addEventListener('change', () => {
       applyCoinPreset();
+      updateConvertLabels();
       loadAndRender().catch(() => {});
     });
     $('quoteCurrencySelect').addEventListener('change', () => {
       applyCoinPreset();
+      updateConvertLabels();
       loadAndRender().catch(() => {});
     });
     $('searchBtn').addEventListener('click', () => loadAndRender().catch(() => {}));
@@ -1568,6 +1628,21 @@
     $('startPosterBtn').addEventListener('click', () => postingLoop().catch(() => {}));
     $('stopPosterBtn').addEventListener('click', stopPosting);
 
+    $('gearBtn').addEventListener('click', () => {
+      const walletCard = $('walletCard');
+      const tickerCard = $('tickerCard');
+      if (walletCard.style.display === 'none') {
+        walletCard.style.display = 'block';
+        tickerCard.classList.remove('span-12');
+        tickerCard.classList.add('span-8');
+      } else {
+        walletCard.style.display = 'none';
+        tickerCard.classList.remove('span-8');
+        tickerCard.classList.add('span-12');
+      }
+      setTimeout(() => drawChart(), 50); // Redraw chart as dimensions changed
+    });
+
     window.addEventListener('resize', () => drawChart());
 
     // Range buttons
@@ -1580,6 +1655,8 @@
       document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', b.dataset.range === range));
       loadAndRender().catch(() => {});
     });
+
+    updateConvertLabels();
 
     // Chart hover / drag tooltip
     const _chartEl = $('chart');
