@@ -892,16 +892,6 @@
       if (!S.keyring) S.keyring = kr;
       const [cA, cB] = kr.changes;
 
-      const utxoGroups = await Promise.all(kr.all.map(async sg => {
-        const res = await rateLimitedFetch(`${getMempoolApi()}/address/${encodeURIComponent(sg.addr)}/utxo`);
-        if (!res.ok) throw new Error(`UTXO fetch failed for ${sg.label}`);
-        const items = await res.json();
-        return items.filter(u => u.status?.confirmed).map(u => ({ ...u, srcAddr: sg.addr, signer: sg }));
-      }));
-
-      const allUtxos = utxoGroups.flat();
-      if (!allUtxos.length) throw new Error('No confirmed UTXOs found');
-
       let feeRate = FEE_DEFAULT;
       try {
         const fr = await fetchJson(`${getMempoolApi()}/v1/fees/recommended`);
@@ -911,14 +901,28 @@
       const estFee = (inputs, outputsCount) => Math.ceil((10 + 148 * inputs + 34 * outputsCount) * feeRate);
       const outSats = outputs.map(o => ({ addr: o.addr, sat: Math.round(o.amount * 1e8) }));
       const totalOut = outSats.reduce((s, o) => s + o.sat, 0);
-      const totalsByAddr = kr.all.reduce((m, sg) => m.set(sg.addr, 0), new Map());
-      allUtxos.forEach(u => totalsByAddr.set(u.srcAddr, (totalsByAddr.get(u.srcAddr) || 0) + Number(u.value || 0)));
+
+      const balances = await Promise.all(kr.all.map(async sg => ({ sg, bal: await getBalance(sg.addr) })));
+      const totalsByAddr = new Map();
+      balances.forEach(b => totalsByAddr.set(b.sg.addr, b.bal.confirmed));
 
       const candidates = [kr.main, cA, cB].sort((a, b) => (totalsByAddr.get(b.addr) || 0) - (totalsByAddr.get(a.addr) || 0));
       let selected = null, selectedUtxos = [], selectedTotal = 0;
 
       for (const src of candidates) {
-        const pool = allUtxos.filter(u => u.srcAddr === src.addr).sort((a, b) => b.value - a.value);
+        if ((totalsByAddr.get(src.addr) || 0) < totalOut) continue; // Early optimization: avoid UTXO fetch if balance isn't close
+
+        let items = [];
+        try {
+          const res = await rateLimitedFetch(`${getMempoolApi()}/address/${encodeURIComponent(src.addr)}/utxo`);
+          if (!res.ok) throw new Error(`UTXO fetch failed for ${src.label}`);
+          items = await res.json();
+        } catch (e) {
+          console.warn(`Skipping candidate ${src.label} due to UTXO fetch error:`, e.message);
+          continue; // Move on to the next candidate if UTXO fetch fails (e.g. >500 utxos)
+        }
+
+        const pool = items.filter(u => u.status?.confirmed).map(u => ({ ...u, srcAddr: src.addr, signer: src })).sort((a, b) => b.value - a.value);
         let local = [], total = 0;
         for (const u of pool) {
           local.push(u); total += u.value;
