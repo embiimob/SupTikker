@@ -159,6 +159,20 @@
     }
     .small { font-size: .82rem; color: var(--muted); }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .wallet-lines { display: grid; gap: 8px; }
+    .wallet-line {
+      background: #0a1324;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+    .wallet-line code { display: block; word-break: break-all; margin: 4px 0; }
+    .wallet-line.has-unconfirmed {
+      border-color: color-mix(in srgb, var(--warn), white 15%);
+      box-shadow: 0 0 0 2px rgba(255, 203, 104, .18);
+    }
+    .small-btn { padding: 6px 10px; font-size: .8rem; border-radius: 8px; }
+    .export-wif-btn { margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -274,7 +288,7 @@
           </div>
 
           <div id="walletStatus" class="status">Wallet locked.</div>
-          <div id="walletInfo" class="small" style="margin-top:8px"></div>
+          <div id="walletInfo" class="wallet-lines" style="margin-top:8px"></div>
         </div>
       </section>
 
@@ -328,6 +342,7 @@
     const DUST = 546;
     const FEE_DEFAULT = 10;
     const FEE_MIN = 2;
+    const CHANGE_SPAM_FILTER_THRESHOLD = 450;
     const CHANGE_PREFIX = 'sup:testnet3:change:';
     const AMOUNT_PER = DUST / 1e8;
     const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -812,6 +827,14 @@
       throw new Error('Unexpected WIF length');
     }
 
+    async function priv2wif(pb) {
+      const body = new Uint8Array(34);
+      body[0] = 0xef;
+      body.set(pb, 1);
+      body[33] = 0x01;
+      return encB58C(body);
+    }
+
     async function priv2addr(pb) {
       const pub = priv2pub(pb), h = ripemd160(await sha256(pub));
       return encB58C(new Uint8Array([P2FK_VER, ...h]));
@@ -850,15 +873,39 @@
     async function buildKeyring(base) {
       const main = await buildSignerEntry(base, 'main');
       const changes = [];
+      let nextChangeSlot = 0;
       for (let i = 0; i < 200; i++) {
         const d = await deriveChangeKey(base, `slot-${i + 1}`);
         const entry = await buildSignerEntry(d, `change-${i + 1}`);
-        const bal = await getBalance(entry.addr).catch(() => ({ confirmed: 0, unconfirmed: 0, tx_count: 0, utxo_count: 0 }));
+        const bal = await getBalance(entry.addr).catch(() => ({ confirmed: 0, unconfirmed: 0, tx_count: 0, utxo_count: 0, funded_txo_count: 0 }));
         entry.utxoCount = bal.utxo_count;
+        entry.fundedTxoCount = bal.funded_txo_count || 0;
+        nextChangeSlot = i + 1;
+        const totalBalance = (bal.confirmed || 0) + (bal.unconfirmed || 0);
+        if (totalBalance === 0 && entry.fundedTxoCount > CHANGE_SPAM_FILTER_THRESHOLD) continue;
         changes.push(entry);
         if (i >= 1 && bal.tx_count === 0) break;
       }
-      return { main, changes, all: [main, ...changes] };
+      return { main, changes, all: [main, ...changes], nextChangeSlot };
+    }
+
+    async function appendNextEligibleChange(kr) {
+      let nextIdx = Math.max(Number(kr.nextChangeSlot || 0), 0);
+      while (nextIdx < 200) {
+        const d = await deriveChangeKey(kr.main.pb, `slot-${nextIdx + 1}`);
+        const newChange = await buildSignerEntry(d, `change-${nextIdx + 1}`);
+        const bal = await getBalance(newChange.addr).catch(() => ({ confirmed: 0, unconfirmed: 0, utxo_count: 0, funded_txo_count: 0 }));
+        newChange.utxoCount = bal.utxo_count || 0;
+        newChange.fundedTxoCount = bal.funded_txo_count || 0;
+        kr.nextChangeSlot = nextIdx + 1;
+        nextIdx++;
+        const totalBalance = (bal.confirmed || 0) + (bal.unconfirmed || 0);
+        if (totalBalance === 0 && newChange.fundedTxoCount > CHANGE_SPAM_FILTER_THRESHOLD) continue;
+        kr.changes.push(newChange);
+        kr.all.push(newChange);
+        return newChange;
+      }
+      return null;
     }
 
     function serializeTx(inputs, outputs, sigIdx = -1, sigScript = null) {
@@ -909,10 +956,11 @@
       const totalsByAddr = new Map();
       const utxoCountByAddr = new Map();
       const balancePromises = kr.all.map(async sg => {
-        const bal = await getBalance(sg.addr).catch(() => ({ confirmed: 0, unconfirmed: 0, utxo_count: 0 }));
+        const bal = await getBalance(sg.addr).catch(() => ({ confirmed: 0, unconfirmed: 0, utxo_count: 0, funded_txo_count: 0 }));
         totalsByAddr.set(sg.addr, bal.confirmed);
         utxoCountByAddr.set(sg.addr, bal.utxo_count);
         sg.utxoCount = bal.utxo_count;
+        sg.fundedTxoCount = bal.funded_txo_count || 0;
       });
       await Promise.all(balancePromises);
 
@@ -948,34 +996,16 @@
       const change = selectedTotal - totalOut - fee;
       if (change < 0) throw new Error('Insufficient balance after fee');
 
-      let validChanges = kr.changes.filter(c => utxoCountByAddr.get(c.addr) < 420);
+      let validChanges = kr.changes.filter(c => (c.fundedTxoCount || 0) <= CHANGE_SPAM_FILTER_THRESHOLD);
 
       if (validChanges.length === 0) {
-        const nextIdx = kr.changes.length;
-        if (nextIdx < 200) {
-          const d = await deriveChangeKey(kr.main.pb, `slot-${nextIdx+1}`);
-          const newChange = await buildSignerEntry(d, `change-${nextIdx+1}`);
-          newChange.utxoCount = 0;
-          kr.changes.push(newChange);
-          kr.all.push(newChange);
-          validChanges.push(newChange);
-        } else {
-          throw new Error('All 200 change addresses have >= 420 UTXOs. Cannot create more change outputs.');
-        }
+        const newChange = await appendNextEligibleChange(kr);
+        if (newChange && (newChange.fundedTxoCount || 0) <= CHANGE_SPAM_FILTER_THRESHOLD) validChanges.push(newChange);
       }
+      if (validChanges.length === 0) throw new Error(`All 200 change addresses exceed ${CHANGE_SPAM_FILTER_THRESHOLD} funded outputs. Cannot create more change outputs.`);
 
-      let changeAddr = validChanges[0].addr;
-      if (validChanges.length > 1) {
-        const lastIdx = validChanges.findIndex(c => c.addr === S.lastChangeOutputAddr);
-        if (lastIdx >= 0) {
-          changeAddr = validChanges[(lastIdx + 1) % validChanges.length].addr;
-        } else if (selected) {
-          const selIdx = validChanges.findIndex(c => c.addr === selected.addr);
-          if (selIdx >= 0) {
-            changeAddr = validChanges[(selIdx + 1) % validChanges.length].addr;
-          }
-        }
-      }
+      validChanges.sort((a, b) => (a.fundedTxoCount || 0) - (b.fundedTxoCount || 0));
+      const changeAddr = validChanges[0].addr;
       S.lastChangeOutputAddr = changeAddr;
 
       const finalOuts = [...outSats];
@@ -996,10 +1026,11 @@
       const validChanges = [];
 
       await Promise.all(kr.all.map(async sg => {
-        const bal = await getBalance(sg.addr).catch(() => ({confirmed: 0, unconfirmed: 0, utxo_count: 0}));
+        const bal = await getBalance(sg.addr).catch(() => ({confirmed: 0, unconfirmed: 0, utxo_count: 0, funded_txo_count: 0}));
         if (kr.changes.includes(sg)) {
           sg.utxoCount = bal.utxo_count;
-          if (sg.utxoCount < 420) {
+          sg.fundedTxoCount = bal.funded_txo_count || 0;
+          if (sg.fundedTxoCount <= CHANGE_SPAM_FILTER_THRESHOLD) {
             validChanges.push(sg);
           }
         }
@@ -1016,20 +1047,12 @@
       if(!allUtxos.length) throw new Error('No confirmed funds to consolidate');
 
       if (validChanges.length === 0) {
-         const nextIdx = kr.changes.length;
-         if (nextIdx < 200) {
-            const d = await deriveChangeKey(kr.main.pb, `slot-${nextIdx+1}`);
-            const newChange = await buildSignerEntry(d, `change-${nextIdx+1}`);
-            newChange.utxoCount = 0;
-            kr.changes.push(newChange);
-            kr.all.push(newChange);
-            validChanges.push(newChange);
-         } else {
-            throw new Error('No valid change addresses to consolidate to');
-         }
+        const newChange = await appendNextEligibleChange(kr);
+        if (newChange && (newChange.fundedTxoCount || 0) <= CHANGE_SPAM_FILTER_THRESHOLD) validChanges.push(newChange);
       }
+      if (validChanges.length === 0) throw new Error('No valid change addresses to consolidate to');
 
-      validChanges.sort((a,b) => a.utxoCount - b.utxoCount);
+      validChanges.sort((a,b) => (a.fundedTxoCount || 0) - (b.fundedTxoCount || 0) || (a.utxoCount || 0) - (b.utxoCount || 0));
       const targetChange = validChanges[0];
 
       let feeRate = FEE_DEFAULT;
@@ -1193,22 +1216,54 @@
         unconfirmed: Number(ms.funded_txo_sum || 0),
         tx_count,
         utxo_count,
+        funded_txo_count: Number(cs.funded_txo_count || 0),
       };
+    }
+
+    function renderWalletInfo(entries = []) {
+      const box = $('walletInfo');
+      if (!entries.length) {
+        box.innerHTML = '<div class="wallet-line"><span class="small">No unlocked wallet.</span></div>';
+        return;
+      }
+      box.innerHTML = entries.map(entry => {
+        const hasUnconfirmed = (entry.unconfirmed || 0) > 0;
+        const isChange = String(entry.label || '').startsWith('change-');
+        const wifBtn = isChange ? `<button class="small-btn export-wif-btn" data-export-wif="${esc(entry.addr)}">Export WIF</button>` : '';
+        return `
+          <div class="wallet-line${hasUnconfirmed ? ' has-unconfirmed' : ''}">
+            <div><strong>${esc(entry.label)}</strong></div>
+            <code>${esc(entry.addr)}</code>
+            <div class="small">Confirmed: ${(entry.confirmed / 1e8).toFixed(8)} tBTC · Unconfirmed: ${(entry.unconfirmed / 1e8).toFixed(8)} tBTC · Funded outputs: ${esc(String(entry.funded_txo_count || 0))}</div>
+            ${wifBtn}
+          </div>
+        `;
+      }).join('');
+      box.querySelectorAll('[data-export-wif]').forEach(btn => btn.addEventListener('click', async () => {
+        const signer = S.keyring?.all?.find(s => s.addr === btn.dataset.exportWif);
+        if (!signer) return;
+        try {
+          const wif = await priv2wif(signer.pb);
+          window.prompt(`WIF for ${signer.label} (${signer.addr})`, wif);
+        } catch (e) {
+          alert(`Error exporting WIF: ${e.message || e}`);
+        }
+      }));
     }
 
     async function refreshWalletInfo() {
       if (!S.priv || !S.keyring) {
-        $('walletInfo').innerHTML = 'No unlocked wallet.';
+        renderWalletInfo([]);
         return { confirmed: 0, unconfirmed: 0 };
       }
       const balances = await Promise.all(S.keyring.all.map(async sg => ({
         label: sg.label,
         addr: sg.addr,
-        bal: await getBalance(sg.addr),
+        bal: await getBalance(sg.addr).catch(() => ({ confirmed: 0, unconfirmed: 0, tx_count: 0, utxo_count: 0, funded_txo_count: 0 })),
       })));
       const confirmed = balances.reduce((s, x) => s + x.bal.confirmed, 0);
       const unconfirmed = balances.reduce((s, x) => s + x.bal.unconfirmed, 0);
-      $('walletInfo').innerHTML = balances.map(x => `${esc(x.label)} · <code>${esc(shortAddr(x.addr))}</code> · ${(x.bal.confirmed / 1e8).toFixed(8)} tBTC confirmed`).join('<br>');
+      renderWalletInfo(balances.map(x => ({ label: x.label, addr: x.addr, ...x.bal })));
       setStatus('walletStatus', `Wallet unlocked ✓ (main + ${S.keyring?.changes?.length || 0} change addresses). Confirmed ${(confirmed / 1e8).toFixed(8)} tBTC, unconfirmed ${(unconfirmed / 1e8).toFixed(8)} tBTC.`, 'good');
       return { confirmed, unconfirmed };
     }
@@ -1230,7 +1285,7 @@
       S.posting = false;
       if (S.posterTimer) clearTimeout(S.posterTimer);
       setStatus('walletStatus', 'Wallet locked.');
-      $('walletInfo').innerHTML = 'No unlocked wallet.';
+      renderWalletInfo([]);
       $('wifInput').value = '';
     }
 
@@ -1701,13 +1756,9 @@
           }
 
           // It's time to etch — check balance via mempool.
-          const { confirmed, unconfirmed } = await refreshWalletInfo();
+          const { confirmed } = await refreshWalletInfo();
           if (confirmed < DUST * 3) {
-            if (unconfirmed > 0) {
-              setStatus('walletStatus', 'Funds unconfirmed — waiting for confirmation…', 'warn');
-            } else {
-              setStatus('walletStatus', 'Waiting for confirmed funds across main/change addresses…', 'warn');
-            }
+            setStatus('walletStatus', 'Waiting for enough confirmed funds on a source address…', 'warn');
             await sleep(30000);
             continue;
           }
