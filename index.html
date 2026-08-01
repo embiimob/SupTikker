@@ -255,6 +255,10 @@
             <label for="wifInput">Testnet3 WIF</label>
             <input id="wifInput" type="password" placeholder="c... or 9..." autocomplete="off" spellcheck="false">
           </div>
+          <div class="field">
+            <label for="feeRateInput">Min fee rate (sat/vbyte)</label>
+            <input id="feeRateInput" type="number" min="1" step="1" value="2" style="max-width:120px" autocomplete="off">
+          </div>
           <div class="btns">
             <button id="unlockBtn" class="primary">Unlock wallet</button>
             <button id="refreshWalletBtn">Refresh balances</button>
@@ -938,6 +942,11 @@
       return b2h(serializeTx(inputs, finalOuts));
     }
 
+    function getUserFeeRate() {
+      const v = parseInt($('feeRateInput')?.value, 10);
+      return Number.isFinite(v) && v >= FEE_MIN ? v : FEE_MIN;
+    }
+
     async function broadcastTx(outputs) {
       if (!S.priv) throw new Error('Wallet is locked');
       const kr = S.keyring || await buildKeyring(S.priv);
@@ -946,7 +955,7 @@
       let feeRate = FEE_DEFAULT;
       try {
         const fr = await fetchJson(`${getMempoolApi()}/v1/fees/recommended`);
-        feeRate = Math.max(Number(fr?.halfHourFee || FEE_DEFAULT), FEE_MIN);
+        feeRate = Math.max(Number(fr?.halfHourFee || FEE_DEFAULT), getUserFeeRate());
       } catch {}
 
       const estFee = (inputs, outputsCount) => Math.ceil((10 + 148 * inputs + 34 * outputsCount) * feeRate);
@@ -1058,7 +1067,7 @@
       let feeRate = FEE_DEFAULT;
       try {
         const fr = await fetchJson(`${getMempoolApi()}/v1/fees/recommended`);
-        feeRate = Math.max(Number(fr?.halfHourFee || FEE_DEFAULT), FEE_MIN);
+        feeRate = Math.max(Number(fr?.halfHourFee || FEE_DEFAULT), getUserFeeRate());
       } catch {}
 
       const fee = Math.ceil((10 + 148 * allUtxos.length + 34) * feeRate);
@@ -1108,7 +1117,7 @@
       let feeRate = FEE_DEFAULT;
       try {
         const fr = await fetchJson(`${getMempoolApi()}/v1/fees/recommended`);
-        feeRate = Math.max(Number(fr?.halfHourFee || FEE_DEFAULT), FEE_MIN);
+        feeRate = Math.max(Number(fr?.halfHourFee || FEE_DEFAULT), getUserFeeRate());
       } catch {}
 
       const fee = Math.ceil((10 + 148 * utxos.length + 34) * feeRate);
@@ -1763,6 +1772,23 @@
             continue;
           }
 
+          // Before attempting to post, check whether any change address has unconfirmed
+          // incoming funds but zero confirmed balance.  If so, skip this tick and wait for
+          // the pending confirmation rather than attempting (and failing) a broadcast.
+          if (S.keyring) {
+            const changeBalances = await Promise.all(
+              S.keyring.changes.map(sg => getBalance(sg.addr).catch(() => ({ confirmed: 0, unconfirmed: 0 })))
+            );
+            const totalChangeConfirmed = changeBalances.reduce((s, b) => s + (b.confirmed || 0), 0);
+            const totalChangeUnconfirmed = changeBalances.reduce((s, b) => s + (b.unconfirmed || 0), 0);
+            if (totalChangeConfirmed === 0 && totalChangeUnconfirmed > 0) {
+              appendLog('Change address has unconfirmed incoming funds. Waiting for confirmation before posting.', 'warn');
+              setStatus('walletStatus', 'Waiting for change address funds to confirm…', 'warn');
+              await sleep(30000);
+              continue;
+            }
+          }
+
           await postCurrentPrice();
           S.lastPostAt = Date.now();
           await loadAndRender();
@@ -1774,8 +1800,13 @@
             setStatus('walletStatus', 'Posted successfully. Interval is 0, waiting for immediate next cycle.', 'good');
           }
         } catch (error) {
-          appendLog(`Posting loop warning: ${error.message || error}`, 'warn');
-          setStatus('walletStatus', `Auto posting paused by error: ${error.message || error}`, 'warn');
+          if (/insufficient funds|insufficient balance/i.test(error.message)) {
+            appendLog(`Insufficient confirmed funds; a change address may still be pending confirmation. Will retry on next cycle.`, 'warn');
+            setStatus('walletStatus', 'Waiting for confirmed funds to be available. Will retry automatically.', 'warn');
+          } else {
+            appendLog(`Posting loop warning: ${error.message || error}`, 'warn');
+            setStatus('walletStatus', `Auto posting paused by error: ${error.message || error}`, 'warn');
+          }
           await sleep(30000);
         }
       }
