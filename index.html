@@ -354,7 +354,11 @@
     const ADDR_RE = /^[mn][1-9A-HJ-NP-Za-km-z]{25,34}$/;
     const TXID_RE = /^[0-9a-fA-F]{64}$/;
     const CID_RE = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/i;
-    const IPFS_GWS = ['https://ipfs.io/ipfs/','https://dweb.link/ipfs/','https://w3s.link/ipfs/'];
+    const IPFS_GWS = [
+      'https://ipfs.filebase.io/ipfs/',
+      'https://gateway.pinata.cloud/ipfs/',
+      'https://hardbin.com/ipfs/'
+    ];
     const IPFS_PATH_RE = /^\/?ipfs\/([a-zA-Z0-9]+)(?:\/(.*))?$/i;
     const FALLBACK_AVI = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" fill="%23182a45"/%3E%3Ctext x="50%25" y="56%25" dominant-baseline="middle" text-anchor="middle" font-family="system-ui" font-size="52" fill="%23a9bee6"%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E';
 
