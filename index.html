@@ -1326,7 +1326,7 @@
       const cutoff = windowMs != null ? Date.now() - windowMs : 0;
       const rows = [];
       for (let page = 0; page < maxPages; page++) {
-        const qty = 120;
+        const qty = 1000;
         const skip = page * qty;
         const data = await fetchJson(`${getApiBase()}/GetPublicMessagesByAddress/${encodeURIComponent(addr)}?mainnet=false&skip=${skip}&qty=${qty}`, 30000);
         const normalized = (Array.isArray(data) ? data : []).map(normalizeRoot).filter(Boolean);
